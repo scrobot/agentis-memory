@@ -3,6 +3,7 @@ package io.agentis.memory.command.kv;
 import io.agentis.memory.config.ServerConfig;
 import io.agentis.memory.resp.RespMessage;
 import io.agentis.memory.store.KvStore;
+import io.agentis.memory.store.StoreValue;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -44,7 +45,7 @@ class TtlCommandTest {
     void returnsNegativeTwoForExpiredKey() {
         // Insert an already-expired entry directly
         kvStore.getStore().put("k1", new KvStore.Entry(
-                "v".getBytes(StandardCharsets.UTF_8),
+                new StoreValue.StringValue("v".getBytes(StandardCharsets.UTF_8)),
                 System.currentTimeMillis() - 5000,
                 System.currentTimeMillis() - 1,
                 false));

@@ -3,13 +3,14 @@ package io.agentis.memory.command.kv;
 import io.agentis.memory.command.CommandHandler;
 import io.agentis.memory.resp.RespMessage;
 import io.agentis.memory.store.KvStore;
+import io.agentis.memory.store.StoreValue;
 import io.netty.channel.ChannelHandlerContext;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 
 import java.util.List;
 
-// TYPE key — returns +string if key exists, +none if not
+// TYPE key — returns the Redis type name of the value stored at key, or +none if absent
 @Singleton
 public class TypeCommand implements CommandHandler {
 
@@ -26,9 +27,14 @@ public class TypeCommand implements CommandHandler {
             return new RespMessage.Error("ERR wrong number of arguments for 'TYPE'");
         }
         String key = new String(args.get(1));
-        return kvStore.get(key) != null
-                ? new RespMessage.SimpleString("string")
-                : new RespMessage.SimpleString("none");
+        KvStore.Entry entry = kvStore.getEntry(key);
+        if (entry == null) {
+            return new RespMessage.SimpleString("none");
+        }
+        String typeName = switch (entry.value()) {
+            case StoreValue.StringValue ignored -> "string";
+        };
+        return new RespMessage.SimpleString(typeName);
     }
 
     @Override

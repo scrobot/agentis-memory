@@ -20,7 +20,7 @@ public class KvStore {
         this.config = config;
     }
 
-    public record Entry(byte[] value, long createdAt, long expireAt, boolean hasVectorIndex) {
+    public record Entry(StoreValue value, long createdAt, long expireAt, boolean hasVectorIndex) {
         public boolean isExpired() {
             return expireAt != -1 && System.currentTimeMillis() > expireAt;
         }
@@ -28,9 +28,10 @@ public class KvStore {
 
     public void set(String key, byte[] value, long ttlSeconds) {
         long expireAt = ttlSeconds > 0 ? System.currentTimeMillis() + (ttlSeconds * 1000) : -1;
-        store.put(key, new Entry(value, System.currentTimeMillis(), expireAt, false));
+        store.put(key, new Entry(new StoreValue.StringValue(value), System.currentTimeMillis(), expireAt, false));
     }
 
+    /** Returns the raw bytes for a string key, or null if missing/expired/wrong type. */
     public byte[] get(String key) {
         Entry e = store.get(key);
         if (e == null) return null;
@@ -38,12 +39,27 @@ public class KvStore {
             store.remove(key);
             return null;
         }
-        return e.value;
+        if (e.value() instanceof StoreValue.StringValue sv) {
+            return sv.raw();
+        }
+        return null;
+    }
+
+    /** Returns the live Entry (null if missing or expired). */
+    public Entry getEntry(String key) {
+        Entry e = store.get(key);
+        if (e == null) return null;
+        if (e.isExpired()) {
+            store.remove(key);
+            return null;
+        }
+        return e;
     }
 
     public boolean delete(String key) {
         return store.remove(key) != null;
     }
+
     public boolean expire(String key, long seconds) {
         Entry e = store.get(key);
         if (e == null || e.isExpired()) {
@@ -54,9 +70,11 @@ public class KvStore {
         store.put(key, new Entry(e.value(), e.createdAt(), expireAt, e.hasVectorIndex()));
         return true;
     }
+
     public int size() {
         return store.size();
     }
+
     public ConcurrentHashMap<String, Entry> getStore() {
         return store;
     }
