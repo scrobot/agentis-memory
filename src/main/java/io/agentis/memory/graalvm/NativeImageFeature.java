@@ -27,8 +27,13 @@ public class NativeImageFeature implements Feature {
 
     @Override
     public void afterRegistration(AfterRegistrationAccess access) {
-        // Netty: extensive use of Unsafe, static platform detection, native transport
-        RuntimeClassInitialization.initializeAtRunTime("io.netty");
+        // Netty: let Netty's own META-INF/native-image configs handle util/transport classes.
+        // We add specific packages that fail at build-time.
+        RuntimeClassInitialization.initializeAtRunTime("io.netty.buffer");
+        RuntimeClassInitialization.initializeAtRunTime("io.netty.channel");
+        RuntimeClassInitialization.initializeAtRunTime("io.netty.handler");
+        RuntimeClassInitialization.initializeAtRunTime("io.netty.resolver");
+        RuntimeClassInitialization.initializeAtRunTime("io.netty.bootstrap");
 
         // ONNX Runtime: JNI-based, loads native .dylib/.so at static init
         RuntimeClassInitialization.initializeAtRunTime("ai.onnxruntime");
@@ -44,5 +49,8 @@ public class NativeImageFeature implements Feature {
 
         // SLF4J static binding
         RuntimeClassInitialization.initializeAtRunTime("org.slf4j");
+
+        // jctools (used by Netty internally for concurrent queues)
+        RuntimeClassInitialization.initializeAtRunTime("org.jctools");
     }
 }

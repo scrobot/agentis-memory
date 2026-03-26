@@ -137,13 +137,19 @@ graalvmNative {
                     "--add-modules=jdk.incubator.vector",
                     "-H:+UnlockExperimentalVMOptions",
                     "--no-fallback",
+                    "-J--enable-native-access=ALL-UNNAMED",
 
                     // ── Resources to bundle in the binary ──
                     "-H:IncludeResources=models/.*",
                     "-H:IncludeResources=logback.xml",
 
-                    // ── Netty: most classes need runtime init due to static native/unsafe access ──
-                    "--initialize-at-run-time=io.netty",
+                    // ── Netty: let Netty's own META-INF/native-image configs handle most classes.
+                    // Add specific packages that fail at build-time. ──
+                    "--initialize-at-run-time=io.netty.buffer",
+                    "--initialize-at-run-time=io.netty.channel",
+                    "--initialize-at-run-time=io.netty.handler",
+                    "--initialize-at-run-time=io.netty.resolver",
+                    "--initialize-at-run-time=io.netty.bootstrap",
 
                     // ── ONNX Runtime: JNI-heavy, must init at runtime ──
                     "--initialize-at-run-time=ai.onnxruntime",
