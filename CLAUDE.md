@@ -51,55 +51,21 @@ agentis-memory/
     │   │   ├── kv/                         # standard Redis commands
     │   │   │   ├── SetCommand.java
     │   │   │   ├── GetCommand.java
-    │   │   │   ├── DelCommand.java
-    │   │   │   ├── ExistsCommand.java
-    │   │   │   ├── ExpireCommand.java
-    │   │   │   ├── TtlCommand.java
-    │   │   │   ├── KeysCommand.java
-    │   │   │   ├── ScanCommand.java
-    │   │   │   ├── TypeCommand.java
-    │   │   │   ├── DbSizeCommand.java
-    │   │   │   ├── BgSaveCommand.java
-    │   │   │   ├── PingCommand.java
-    │   │   │   ├── QuitCommand.java
-    │   │   │   ├── AuthCommand.java
-    │   │   │   ├── InfoCommand.java
-    │   │   │   ├── ClientCommand.java
-    │   │   │   ├── ConfigCommand.java
-    │   │   │   └── CommandMetaCommand.java
-    │   │   └── mem/                        # custom memory commands
-    │   │       ├── MemSaveCommand.java
-    │   │       ├── MemQueryCommand.java
-    │   │       ├── MemDelCommand.java
-    │   │       └── MemStatusCommand.java
+    │   │   │   └── PingCommand.java
+    │   │   └── mem/                        # (Future Layer 2)
     │   ├── store/
     │   │   ├── Entry.java                  # record: value, createdAt, expireAt, hasVectorIndex
-    │   │   ├── KvStore.java                # ConcurrentHashMap<String, Entry>
-    │   │   ├── ExpiryManager.java          # lazy + active expiry (Redis-style 25% threshold)
-    │   │   └── EvictionManager.java        # volatile-lru eviction
-    │   ├── vector/
-    │   │   ├── Chunk.java                  # record: parentKey, index, text, vector, namespace
-    │   │   ├── Chunker.java                # sentence-boundary splitting with overlap
-    │   │   ├── Embedder.java               # ONNX Runtime inference, batching
-    │   │   ├── HnswIndex.java              # jvector HNSW wrapper, namespace post-filter
-    │   │   └── VectorEngine.java           # coordinator + per-key IndexStatus tracking
-    │   └── persistence/
-    │       ├── AofWriter.java              # append-only file, configurable fsync
-    │       ├── AofReader.java              # AOF replay for recovery
-    │       ├── SnapshotWriter.java         # periodic KV + HNSW snapshots (AGMM format)
-    │       └── SnapshotReader.java         # recovery coordinator
+    │   │   └── KvStore.java                # ConcurrentHashMap<String, Entry>
+    │   └── vector/
+    │       └── Embedder.java               # ONNX Runtime inference, batching
     └── test/java/io/agentis/memory/
         ├── resp/RespDecoderTest.java
         ├── store/KvStoreTest.java
-        ├── vector/ChunkerTest.java
-        ├── vector/EmbedderTest.java
-        ├── vector/HnswIndexTest.java
         └── integration/
-            ├── RedisClientCompatTest.java  # Jedis against running server
-            └── MemoryE2eTest.java          # MEMSAVE → MEMQUERY end-to-end
+            └── BasicCommandsTest.java      # Jedis against running server
 ```
 
-The project is in **early implementation phase**. Design spec is complete and reviewed. All source file stubs are in place; logic is pending.
+The project is in **Layer 1 implementation phase**. TCP server, RESP protocol, and basic KV commands (SET, GET, PING) are fully implemented. Vector search and persistence (AOF/Snapshots) are planned for subsequent layers.
 
 ## Architecture
 

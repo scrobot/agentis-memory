@@ -1,7 +1,10 @@
 package io.agentis.memory.config;
 
+import jakarta.inject.Singleton;
+
 import java.nio.file.Path;
 
+@Singleton
 public class ServerConfig {
 
     public int port = 6399;
@@ -24,7 +27,13 @@ public class ServerConfig {
 
     public static ServerConfig parse(String[] args) {
         ServerConfig config = new ServerConfig();
-        // TODO: parse CLI args and optional agentis-memory.conf
+        for (int i = 0; i < args.length; i++) {
+            if ("--port".equals(args[i]) && i + 1 < args.length) {
+                config.port = Integer.parseInt(args[++i]);
+            } else if ("--bind".equals(args[i]) && i + 1 < args.length) {
+                config.bind = args[++i];
+            }
+        }
         return config;
     }
 }

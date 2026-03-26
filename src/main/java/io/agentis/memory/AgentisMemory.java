@@ -1,35 +1,36 @@
 package io.agentis.memory;
 
 import io.agentis.memory.config.ServerConfig;
-import io.agentis.memory.persistence.AofWriter;
-import io.agentis.memory.persistence.SnapshotReader;
-import io.agentis.memory.persistence.SnapshotWriter;
 import io.agentis.memory.resp.RespServer;
-import io.agentis.memory.store.KvStore;
-import io.agentis.memory.vector.VectorEngine;
+import io.avaje.inject.BeanScope;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class AgentisMemory {
+    private static final Logger log = LoggerFactory.getLogger(AgentisMemory.class);
 
-    public static void main(String[] args) throws Exception {
+    public static void main(String[] args) {
         ServerConfig config = ServerConfig.parse(args);
 
-        KvStore kvStore = new KvStore(config);
-        VectorEngine vectorEngine = new VectorEngine(config);
-        AofWriter aofWriter = new AofWriter(config);
-        SnapshotWriter snapshotWriter = new SnapshotWriter(config, kvStore, vectorEngine);
+        try (BeanScope scope = BeanScope.builder()
+                .bean(ServerConfig.class, config)
+                .build()) {
 
-        // Recovery: load snapshots then replay AOF delta
-        // Server remains in LOADING state until complete
-        SnapshotReader.recover(config, kvStore, vectorEngine, aofWriter);
+            RespServer server = scope.get(RespServer.class);
 
-        RespServer server = new RespServer(config, kvStore, vectorEngine, aofWriter, snapshotWriter);
+            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                log.info("Shutting down Agentis Memory...");
+                server.shutdown();
+            }));
 
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            server.shutdown();
-            aofWriter.flush();
-            snapshotWriter.writeFinal();
-        }));
-
-        server.start();
+            try {
+                server.start();
+            } catch (InterruptedException e) {
+                log.error("Server interrupted", e);
+                Thread.currentThread().interrupt();
+            } catch (Exception e) {
+                log.error("Failed to start server", e);
+            }
+        }
     }
 }

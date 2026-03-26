@@ -3,10 +3,12 @@ package io.agentis.memory.command.kv;
 import io.agentis.memory.command.CommandHandler;
 import io.agentis.memory.resp.RespMessage;
 import io.netty.channel.ChannelHandlerContext;
+import jakarta.inject.Singleton;
 
 import java.util.List;
 
 // PING [message]
+@Singleton
 public class PingCommand implements CommandHandler {
 
     @Override
@@ -15,5 +17,10 @@ public class PingCommand implements CommandHandler {
             return new RespMessage.BulkString(args.get(1));
         }
         return new RespMessage.SimpleString("PONG");
+    }
+
+    @Override
+    public String name() {
+        return "PING";
     }
 }

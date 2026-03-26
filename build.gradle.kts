@@ -12,6 +12,11 @@ val junitBomVersion: String by project
 val jedisVersion: String by project
 val javaVersion: String by project
 val projectVersion: String by project
+val slf4jVersion: String by project
+val logbackVersion: String by project
+val avajeInjectVersion: String by project
+val jakartaInjectVersion: String by project
+val awaitilityVersion: String by project
 
 group = "io.agentis"
 version = projectVersion
@@ -36,22 +41,26 @@ repositories {
 }
 
 dependencies {
-    // TCP server, RESP protocol
+    // Implementation
     implementation("io.netty:netty-all:$nettyVersion")
-
-    // HNSW vector index (DataStax, Apache 2.0)
     implementation("io.github.jbellis:jvector:$jvectorVersion")
-
-    // ONNX Runtime — inference (Java API, no Panama FFI required for MVP)
     implementation("com.microsoft.onnxruntime:onnxruntime:$onnxruntimeVersion")
-
-    // HuggingFace-compatible tokenizer (DJL)
     implementation("ai.djl.huggingface:tokenizers:$djlTokenizersVersion")
+    implementation("org.slf4j:slf4j-api:$slf4jVersion")
+    implementation("ch.qos.logback:logback-classic:$logbackVersion")
+    implementation("io.avaje:avaje-inject:$avajeInjectVersion")
+    implementation("jakarta.inject:jakarta.inject-api:$jakartaInjectVersion")
 
-    // Test
+    // Annotation Processor
+    annotationProcessor("io.avaje:avaje-inject-generator:$avajeInjectVersion")
+
+    // Test Implementation
     testImplementation(platform("org.junit:junit-bom:$junitBomVersion"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testImplementation("redis.clients:jedis:$jedisVersion")
+    testImplementation("org.awaitility:awaitility:$awaitilityVersion")
+
+    // Test Runtime Only
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
