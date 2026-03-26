@@ -22,7 +22,7 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class ListCommandsIntegrationTest {
     private static final Logger log = LoggerFactory.getLogger(ListCommandsIntegrationTest.class);
-    private static final int PORT = 6396;
+    private static final int PORT = 6403;
 
     private static BeanScope scope;
     private static RespServer server;

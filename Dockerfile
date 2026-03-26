@@ -20,6 +20,11 @@ RUN ./gradlew dependencies --no-daemon -q || echo "WARNING: dependency pre-fetch
 COPY src/ src/
 COPY models/ models/
 
+# Use this arg to bust the cache during the build step.
+# It's better to do this before gradle build, but after source copy
+# so that any source change or external build arg change forces a re-run.
+ARG CACHE_BUST=1
+
 # Build the distribution (tests run against the container, not inside the build)
 RUN ./gradlew installDist --no-daemon -x test
 

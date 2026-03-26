@@ -32,7 +32,7 @@ class SortedSetCommandsTest {
     private static BeanScope scope;
     private static RespServer server;
     private static Jedis jedis;
-    private static final int PORT = 6395;
+    private static final int PORT = 6405;
     private static ExecutorService executor;
 
     @BeforeAll

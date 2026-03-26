@@ -19,7 +19,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class AuthTest {
 
     private static final Logger log = LoggerFactory.getLogger(AuthTest.class);
-    private static final int PORT = 6396;
+    private static final int PORT = 6406;
     private static final String PASSWORD = "testpassword";
 
     private static BeanScope scope;

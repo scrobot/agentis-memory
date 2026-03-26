@@ -22,7 +22,7 @@ class ServerCommandsTest {
     private static BeanScope scope;
     private static RespServer server;
     private static Jedis jedis;
-    private static final int PORT = 6396; // distinct port for this test
+    private static final int PORT = 6404;
     private static ExecutorService executor;
 
     @BeforeAll
