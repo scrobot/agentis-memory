@@ -32,6 +32,17 @@ public class RespServer {
     }
 
     public void start() throws InterruptedException {
+        // Force early init of ByteBufAllocator to surface the real error
+        // (NoClassDefFoundError hides the original ExceptionInInitializerError)
+        try {
+            Class.forName("io.netty.buffer.ByteBufAllocator");
+        } catch (ExceptionInInitializerError e) {
+            log.error("ByteBufAllocator init failed — root cause:", e.getCause());
+            throw new RuntimeException("Netty buffer init failed", e.getCause());
+        } catch (Throwable t) {
+            log.error("ByteBufAllocator class load failed:", t);
+        }
+
         bossGroup = new NioEventLoopGroup(1);
         workerGroup = new NioEventLoopGroup();
 

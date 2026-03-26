@@ -3,10 +3,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      args:
-        # Use a dummy build arg to bust the cache when needed.
-        # Run `docker-compose build --build-arg CACHE_BUST=$(date +%s)` to force rebuild.
-        - CACHE_BUST=1
     image: agentis-memory:latest
     container_name: agentis-memory
     ports:
@@ -33,7 +29,7 @@ services:
     image: agentis-memory:native
     container_name: agentis-memory-native
     ports:
-      - "6398:6399"
+      - "6499:6399"
     volumes:
       - agentis-native-data:/data
     healthcheck:
