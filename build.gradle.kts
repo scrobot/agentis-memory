@@ -17,6 +17,7 @@ val logbackVersion: String by project
 val avajeInjectVersion: String by project
 val jakartaInjectVersion: String by project
 val awaitilityVersion: String by project
+val testcontainersVersion: String by project
 
 group = "io.agentis"
 version = projectVersion
@@ -59,17 +60,45 @@ dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter")
     testImplementation("redis.clients:jedis:$jedisVersion")
     testImplementation("org.awaitility:awaitility:$awaitilityVersion")
+    testImplementation("org.testcontainers:testcontainers:$testcontainersVersion")
+    testImplementation("org.testcontainers:junit-jupiter:$testcontainersVersion")
 
     // Test Runtime Only
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
 tasks.test {
-    useJUnitPlatform()
+    useJUnitPlatform {
+        // Exclude Docker-based tests from the default test run.
+        // Run `./gradlew integrationTest` to include them.
+        excludeTags("docker")
+    }
     jvmArgs(
         "--enable-preview",
         "--add-modules", "jdk.incubator.vector"
     )
+}
+
+tasks.register<Test>("integrationTest") {
+    description = "Runs integration tests that require a running Docker daemon."
+    group = "verification"
+    useJUnitPlatform {
+        includeTags("docker")
+    }
+    jvmArgs(
+        "--enable-preview",
+        "--add-modules", "jdk.incubator.vector"
+    )
+    // Give Docker container enough time to build + start
+    systemProperty("testcontainers.reuse.enable", "false")
+    testLogging {
+        events("passed", "failed", "skipped")
+        showStandardStreams = true
+    }
+    // Depend on compileTestJava so the test classes themselves are compiled before the task runs.
+    // The application under test is built inside the Docker image by the Dockerfile (installDist),
+    // so local build output is NOT used by the container — only test bytecode is needed here.
+    dependsOn(tasks.named("compileTestJava"))
 }
 
 tasks.compileJava {

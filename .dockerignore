@@ -1,0 +1,22 @@
+# Git
+.git/
+.gitignore
+
+# Gradle cache and build output (rebuilt inside the container)
+.gradle/
+build/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# macOS
+.DS_Store
+
+# Logs and runtime data
+*.log
+data/
+
+# Docs (not needed for the build)
+docs/
