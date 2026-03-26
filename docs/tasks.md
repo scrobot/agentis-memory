@@ -40,7 +40,7 @@ TYPE command must return correct type. SCAN/KEYS must iterate all types. DEL/EXI
 **Spec:** [docs/commands/sets.md](commands/sets.md) — 11 commands
 **Test:** Unit test per command. Integration test: SADD/SMEMBERS/SINTER via Jedis. TYPE returns `set`.
 
-### 🔲 2f: Extended String commands 🔀 (after 2a)
+### ✅ 2f: Extended String commands 🔀 (after 2a)
 **Spec:** [docs/commands/strings-extended.md](commands/strings-extended.md) — 13 commands
 **Test:** Unit test per command. INCR/DECR overflow tests. MSET/MGET integration test.
 
