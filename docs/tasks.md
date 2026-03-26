@@ -32,27 +32,27 @@ TYPE command must return correct type. SCAN/KEYS must iterate all types. DEL/EXI
 **Spec:** [docs/commands/lists.md](commands/lists.md) — 11 commands
 **Test:** Unit test per command. Integration test: LPUSH/RPUSH/LPOP/LRANGE via Jedis. TYPE returns `list`.
 
-### 🔲 2d: Sorted Set commands 🔀 (after 2a)
+### ✅ 2d: Sorted Set commands 🔀 (after 2a)
 **Spec:** [docs/commands/sorted-sets.md](commands/sorted-sets.md) — 14 commands
 **Test:** Unit test per command. Integration test: ZADD/ZSCORE/ZRANGE/ZRANGEBYSCORE via Jedis. TYPE returns `zset`.
 
-### 🔲 2e: Set commands 🔀 (after 2a)
+### ✅ 2e: Set commands 🔀 (after 2a)
 **Spec:** [docs/commands/sets.md](commands/sets.md) — 11 commands
 **Test:** Unit test per command. Integration test: SADD/SMEMBERS/SINTER via Jedis. TYPE returns `set`.
 
-### 🔲 2f: Extended String commands 🔀 (after 2a)
+### ✅ 2f: Extended String commands 🔀 (after 2a)
 **Spec:** [docs/commands/strings-extended.md](commands/strings-extended.md) — 13 commands
 **Test:** Unit test per command. INCR/DECR overflow tests. MSET/MGET integration test.
 
-### 🔲 2g: Extended Key commands 🔀 (after 2a)
+### ✅ 2g: Extended Key commands 🔀 (after 2a)
 **Spec:** [docs/commands/keys-basic.md](commands/keys-basic.md) — RENAME, RENAMENX, PERSIST, PEXPIRE, PTTL, RANDOMKEY, UNLINK, OBJECT
 **Test:** Unit test per command. RENAME across types. PERSIST removes TTL.
 
-### 🔲 2h: Extended Server commands 🔀 (after 2a)
+### ✅ 2h: Extended Server commands 🔀 (after 2a)
 **Spec:** [docs/commands/server.md](commands/server.md) — SELECT, FLUSHDB, FLUSHALL, ECHO, TIME
 **Test:** FLUSHDB clears all data. TIME returns valid timestamp. SELECT 0 → OK.
 
-### 🔲 2i: Extend SET command with NX/XX/PX/GET options
+### ✅ 2i: Extend SET command with NX/XX/PX/GET options
 **Spec:** [docs/commands/strings-basic.md](commands/strings-basic.md) — full SET syntax
 **Test:** SET with NX (set only if not exists), XX (set only if exists), PX (ms TTL), GET (return old value).
 

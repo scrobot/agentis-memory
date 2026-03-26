@@ -67,6 +67,8 @@ public class ObjectCommand implements CommandHandler {
                 byte[] raw = sv.raw();
                 yield (raw != null && raw.length <= 44) ? "embstr" : "raw";
             }
+            case StoreValue.HashValue ignored -> "hashtable";
+            case StoreValue.ListValue ignored -> "listpack";
         };
         return new RespMessage.BulkString(encoding.getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
