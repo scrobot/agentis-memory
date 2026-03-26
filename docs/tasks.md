@@ -28,7 +28,7 @@ TYPE command must return correct type. SCAN/KEYS must iterate all types. DEL/EXI
 **Spec:** [docs/commands/hashes.md](commands/hashes.md) — 14 commands
 **Test:** Unit test per command. Integration test: HSET/HGET/HGETALL/HDEL via Jedis. TYPE returns `hash`.
 
-### 🔲 2c: List commands 🔀 (after 2a)
+### ✅ 2c: List commands 🔀 (after 2a)
 **Spec:** [docs/commands/lists.md](commands/lists.md) — 11 commands
 **Test:** Unit test per command. Integration test: LPUSH/RPUSH/LPOP/LRANGE via Jedis. TYPE returns `list`.
 

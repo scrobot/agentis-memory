@@ -1,10 +1,12 @@
 package io.agentis.memory.store;
 
+import java.util.concurrent.CopyOnWriteArrayList;
+
 /**
  * Polymorphic value stored in the KV store.
  * Each permitted type corresponds to a Redis data type.
  */
-public sealed interface StoreValue permits StoreValue.StringValue, StoreValue.HashValue {
+public sealed interface StoreValue permits StoreValue.StringValue, StoreValue.HashValue, StoreValue.ListValue {
 
     record StringValue(byte[] raw) implements StoreValue {}
 
@@ -13,4 +15,11 @@ public sealed interface StoreValue permits StoreValue.StringValue, StoreValue.Ha
             this(new java.util.concurrent.ConcurrentHashMap<>());
         }
     }
+
+    /**
+     * Redis list: doubly-linked semantics, head = index 0.
+     * Wraps a CopyOnWriteArrayList for safe concurrent reads; mutations are
+     * coordinated by KvStore via synchronized blocks on the list object.
+     */
+    record ListValue(CopyOnWriteArrayList<byte[]> list) implements StoreValue {}
 }

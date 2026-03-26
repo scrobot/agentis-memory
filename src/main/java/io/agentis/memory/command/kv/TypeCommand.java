@@ -34,6 +34,7 @@ public class TypeCommand implements CommandHandler {
         String typeName = switch (entry.value()) {
             case StoreValue.StringValue ignored -> "string";
             case StoreValue.HashValue ignored -> "hash";
+            case StoreValue.ListValue ignored -> "list";
         };
         return new RespMessage.SimpleString(typeName);
     }
