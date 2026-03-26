@@ -4,7 +4,7 @@ import io.agentis.memory.command.CommandHandler;
 import io.agentis.memory.resp.RespMessage;
 import io.agentis.memory.vector.Embedder;
 import io.agentis.memory.vector.HnswIndex;
-import io.netty.channel.ChannelHandlerContext;
+import io.agentis.memory.resp.ClientConnection;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import org.slf4j.Logger;
@@ -31,7 +31,7 @@ public class MemQueryCommand implements CommandHandler {
     }
 
     @Override
-    public RespMessage handle(ChannelHandlerContext ctx, List<byte[]> args) {
+    public RespMessage handle(ClientConnection conn, List<byte[]> args) {
         if (args.size() != 4) {
             return new RespMessage.Error("ERR wrong number of arguments for 'MEMQUERY' command");
         }

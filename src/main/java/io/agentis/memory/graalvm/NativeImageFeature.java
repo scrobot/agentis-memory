@@ -9,7 +9,6 @@ import org.graalvm.nativeimage.hosted.RuntimeClassInitialization;
  *
  * <p>Key issues addressed:
  * <ul>
- *   <li>Netty uses sun.misc.Unsafe and static initializers that detect the platform at load time</li>
  *   <li>ONNX Runtime loads native shared libraries (.dylib/.so) via JNI at startup</li>
  *   <li>DJL Tokenizers loads native shared libraries via JNI at startup</li>
  *   <li>jvector uses the Panama Vector API which must be detected at runtime</li>
@@ -27,14 +26,6 @@ public class NativeImageFeature implements Feature {
 
     @Override
     public void afterRegistration(AfterRegistrationAccess access) {
-        // Netty: let Netty's own META-INF/native-image configs handle util/transport classes.
-        // We add specific packages that fail at build-time.
-        RuntimeClassInitialization.initializeAtRunTime("io.netty.buffer");
-        RuntimeClassInitialization.initializeAtRunTime("io.netty.channel");
-        RuntimeClassInitialization.initializeAtRunTime("io.netty.handler");
-        RuntimeClassInitialization.initializeAtRunTime("io.netty.resolver");
-        RuntimeClassInitialization.initializeAtRunTime("io.netty.bootstrap");
-
         // ONNX Runtime: JNI-based, loads native .dylib/.so at static init
         RuntimeClassInitialization.initializeAtRunTime("ai.onnxruntime");
 
@@ -49,8 +40,5 @@ public class NativeImageFeature implements Feature {
 
         // SLF4J static binding
         RuntimeClassInitialization.initializeAtRunTime("org.slf4j");
-
-        // jctools (used by Netty internally for concurrent queues)
-        RuntimeClassInitialization.initializeAtRunTime("org.jctools");
     }
 }

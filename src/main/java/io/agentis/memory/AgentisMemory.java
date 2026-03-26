@@ -49,9 +49,6 @@ public class AgentisMemory {
                 server.start();
                 log.info("Server started. Press Ctrl+C to stop.");
                 server.waitForShutdown();
-            } catch (InterruptedException e) {
-                log.error("Server interrupted", e);
-                Thread.currentThread().interrupt();
             } catch (Exception e) {
                 log.error("Failed to start server", e);
             }

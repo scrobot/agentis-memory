@@ -4,7 +4,7 @@ import io.agentis.memory.command.CommandHandler;
 import io.agentis.memory.command.server.HelloCommand;
 import io.agentis.memory.resp.RespMessage;
 import io.agentis.memory.store.KvStore;
-import io.netty.channel.ChannelHandlerContext;
+import io.agentis.memory.resp.ClientConnection;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 
@@ -23,11 +23,11 @@ public class MGetCommand implements CommandHandler {
     }
 
     @Override
-    public RespMessage handle(ChannelHandlerContext ctx, List<byte[]> args) {
+    public RespMessage handle(ClientConnection conn, List<byte[]> args) {
         if (args.size() < 2) {
             return new RespMessage.Error("ERR wrong number of arguments for 'MGET'");
         }
-        Integer version = ctx != null ? ctx.channel().attr(HelloCommand.PROTOCOL_VERSION).get() : 2;
+        Integer version = conn != null ? (Integer) conn.getAttribute(HelloCommand.PROTOCOL_VERSION) : 2;
         List<RespMessage> results = new ArrayList<>();
         for (int i = 1; i < args.size(); i++) {
             String key = new String(args.get(i));

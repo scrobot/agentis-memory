@@ -4,7 +4,7 @@ import io.agentis.memory.command.CommandHandler;
 import io.agentis.memory.command.server.HelloCommand;
 import io.agentis.memory.resp.RespMessage;
 import io.agentis.memory.store.KvStore;
-import io.netty.channel.ChannelHandlerContext;
+import io.agentis.memory.resp.ClientConnection;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 
@@ -25,7 +25,7 @@ public class HgetallCommand implements CommandHandler {
 
     @Override
     @SuppressWarnings("unchecked")
-    public RespMessage handle(ChannelHandlerContext ctx, List<byte[]> args) {
+    public RespMessage handle(ClientConnection conn, List<byte[]> args) {
         if (args.size() != 2) {
             return new RespMessage.Error("ERR wrong number of arguments for 'hgetall'");
         }
@@ -36,7 +36,7 @@ public class HgetallCommand implements CommandHandler {
         }
 
         List<byte[]> flat = (List<byte[]>) result;
-        Integer version = ctx != null ? ctx.channel().attr(HelloCommand.PROTOCOL_VERSION).get() : 2;
+        Integer version = conn != null ? (Integer) conn.getAttribute(HelloCommand.PROTOCOL_VERSION) : 2;
         if (version != null && version == 3) {
             Map<RespMessage, RespMessage> map = new LinkedHashMap<>();
             for (int i = 0; i < flat.size(); i += 2) {

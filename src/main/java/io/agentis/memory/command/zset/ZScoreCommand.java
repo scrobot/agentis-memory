@@ -5,7 +5,7 @@ import io.agentis.memory.command.server.HelloCommand;
 import io.agentis.memory.resp.RespMessage;
 import io.agentis.memory.store.KvStore;
 import io.agentis.memory.store.StoreValue;
-import io.netty.channel.ChannelHandlerContext;
+import io.agentis.memory.resp.ClientConnection;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 
@@ -24,14 +24,14 @@ public class ZScoreCommand implements CommandHandler {
     }
 
     @Override
-    public RespMessage handle(ChannelHandlerContext ctx, List<byte[]> args) {
+    public RespMessage handle(ClientConnection conn, List<byte[]> args) {
         if (args.size() < 3) {
             return new RespMessage.Error("ERR wrong number of arguments for 'ZSCORE'");
         }
         String key = new String(args.get(1), StandardCharsets.UTF_8);
         String member = new String(args.get(2), StandardCharsets.UTF_8);
 
-        Integer version = ctx != null ? ctx.channel().attr(HelloCommand.PROTOCOL_VERSION).get() : 2;
+        Integer version = conn != null ? (Integer) conn.getAttribute(HelloCommand.PROTOCOL_VERSION) : 2;
 
         KvStore.Entry entry = kvStore.getEntry(key);
         if (entry == null) {

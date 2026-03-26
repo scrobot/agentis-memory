@@ -45,12 +45,12 @@
     "allDeclaredMethods": true
   },
   {
-    "name": "io.agentis.memory.resp.RespDecoder",
+    "name": "io.agentis.memory.resp.RespParser",
     "allDeclaredConstructors": true,
     "allDeclaredMethods": true
   },
   {
-    "name": "io.agentis.memory.resp.RespEncoder",
+    "name": "io.agentis.memory.resp.RespWriter",
     "allDeclaredConstructors": true,
     "allDeclaredMethods": true
   },
@@ -60,7 +60,11 @@
     "allDeclaredMethods": true
   },
   {
-    "name": "io.agentis.memory.resp.CommandDispatcher",
+    "name": "io.agentis.memory.resp.ClientConnection",
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "io.agentis.memory.resp.SocketClientConnection",
     "allDeclaredConstructors": true,
     "allDeclaredMethods": true
   },
@@ -415,125 +419,6 @@
     "allDeclaredFields": true
   },
 
-  {
-    "name": "io.netty.channel.socket.nio.NioServerSocketChannel",
-    "allDeclaredConstructors": true,
-    "allDeclaredMethods": true
-  },
-  {
-    "name": "io.netty.channel.nio.NioEventLoopGroup",
-    "allDeclaredConstructors": true,
-    "allDeclaredMethods": true
-  },
-  {
-    "name": "io.netty.channel.DefaultChannelPipeline",
-    "allDeclaredConstructors": true,
-    "allDeclaredMethods": true
-  },
-  {
-    "name": "io.netty.util.internal.PlatformDependent",
-    "allDeclaredConstructors": true,
-    "allDeclaredMethods": true,
-    "allDeclaredFields": true
-  },
-  {
-    "name": "io.netty.util.internal.PlatformDependent0",
-    "allDeclaredConstructors": true,
-    "allDeclaredMethods": true,
-    "allDeclaredFields": true
-  },
-  {
-    "name": "io.netty.util.internal.shaded.org.jctools.queues.MpscArrayQueueProducerIndexField",
-    "allDeclaredFields": true
-  },
-  {
-    "name": "io.netty.util.internal.shaded.org.jctools.queues.MpscArrayQueueProducerLimitField",
-    "allDeclaredFields": true
-  },
-  {
-    "name": "io.netty.util.internal.shaded.org.jctools.queues.MpscArrayQueueConsumerIndexField",
-    "allDeclaredFields": true
-  },
-  {
-    "name": "io.netty.util.internal.shaded.org.jctools.queues.BaseMpscLinkedArrayQueueProducerFields",
-    "allDeclaredFields": true
-  },
-  {
-    "name": "io.netty.util.internal.shaded.org.jctools.queues.BaseMpscLinkedArrayQueueColdProducerFields",
-    "allDeclaredFields": true
-  },
-  {
-    "name": "io.netty.util.internal.shaded.org.jctools.queues.BaseMpscLinkedArrayQueueConsumerFields",
-    "allDeclaredFields": true
-  },
-  {
-    "name": "io.netty.buffer.AbstractByteBufAllocator",
-    "allDeclaredConstructors": true,
-    "allDeclaredMethods": true
-  },
-  {
-    "name": "io.netty.buffer.PooledByteBufAllocator",
-    "allDeclaredConstructors": true,
-    "allDeclaredMethods": true,
-    "allDeclaredFields": true
-  },
-  {
-    "name": "io.netty.buffer.UnpooledByteBufAllocator",
-    "allDeclaredConstructors": true,
-    "allDeclaredMethods": true,
-    "allDeclaredFields": true
-  },
-  {
-    "name": "io.netty.channel.ChannelHandlerAdapter",
-    "allDeclaredConstructors": true,
-    "allDeclaredMethods": true
-  },
-  {
-    "name": "io.netty.channel.ChannelInboundHandlerAdapter",
-    "allDeclaredConstructors": true,
-    "allDeclaredMethods": true
-  },
-  {
-    "name": "io.netty.channel.ChannelOutboundHandlerAdapter",
-    "allDeclaredConstructors": true,
-    "allDeclaredMethods": true
-  },
-  {
-    "name": "io.netty.handler.codec.ByteToMessageDecoder",
-    "allDeclaredConstructors": true,
-    "allDeclaredMethods": true,
-    "allDeclaredFields": true
-  },
-  {
-    "name": "io.netty.handler.codec.MessageToByteEncoder",
-    "allDeclaredConstructors": true,
-    "allDeclaredMethods": true,
-    "allDeclaredFields": true
-  },
-  {
-    "name": "io.netty.channel.SimpleChannelInboundHandler",
-    "allDeclaredConstructors": true,
-    "allDeclaredMethods": true,
-    "allDeclaredFields": true
-  },
-  {
-    "name": "io.netty.channel.AbstractChannel",
-    "allDeclaredFields": true
-  },
-  {
-    "name": "io.netty.util.AttributeKey",
-    "allDeclaredConstructors": true,
-    "allDeclaredMethods": true
-  },
-
-  {
-    "name": "sun.nio.ch.SelectorImpl",
-    "allDeclaredFields": true
-  },
-  {
-    "name": "sun.nio.ch.ServerSocketChannelImpl",
-    "allDeclaredFields": true
-  },
   {
     "name": "java.lang.Thread",
     "allDeclaredFields": true

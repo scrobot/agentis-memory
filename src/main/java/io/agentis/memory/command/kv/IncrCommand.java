@@ -4,7 +4,7 @@ import io.agentis.memory.command.CommandHandler;
 import io.agentis.memory.resp.RespMessage;
 import io.agentis.memory.store.KvStore;
 import io.agentis.memory.store.StoreValue;
-import io.netty.channel.ChannelHandlerContext;
+import io.agentis.memory.resp.ClientConnection;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 
@@ -26,7 +26,7 @@ public class IncrCommand implements CommandHandler {
     }
 
     @Override
-    public RespMessage handle(ChannelHandlerContext ctx, List<byte[]> args) {
+    public RespMessage handle(ClientConnection conn, List<byte[]> args) {
         String cmd = new String(args.getFirst()).toUpperCase();
         return switch (cmd) {
             case "INCR"        -> handleIncr(args, 1L);

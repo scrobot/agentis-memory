@@ -2,9 +2,8 @@ package io.agentis.memory.command.kv;
 
 import io.agentis.memory.command.CommandHandler;
 import io.agentis.memory.config.ServerConfig;
+import io.agentis.memory.resp.ClientConnection;
 import io.agentis.memory.resp.RespMessage;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.util.AttributeKey;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 
@@ -14,7 +13,7 @@ import java.util.List;
 @Singleton
 public class AuthCommand implements CommandHandler {
 
-    public static final AttributeKey<Boolean> AUTHENTICATED = AttributeKey.valueOf("authenticated");
+    public static final String AUTHENTICATED = "authenticated";
 
     private final ServerConfig config;
 
@@ -24,7 +23,7 @@ public class AuthCommand implements CommandHandler {
     }
 
     @Override
-    public RespMessage handle(ChannelHandlerContext ctx, List<byte[]> args) {
+    public RespMessage handle(ClientConnection conn, List<byte[]> args) {
         if (config.requirepass == null || config.requirepass.isBlank()) {
             return new RespMessage.Error("ERR Client sent AUTH, but no password is set");
         }
@@ -33,10 +32,10 @@ public class AuthCommand implements CommandHandler {
         }
         String provided = new String(args.get(1));
         if (config.requirepass.equals(provided)) {
-            ctx.channel().attr(AUTHENTICATED).set(true);
+            conn.setAttribute(AUTHENTICATED, true);
             return new RespMessage.SimpleString("OK");
         }
-        ctx.channel().attr(AUTHENTICATED).set(false);
+        conn.setAttribute(AUTHENTICATED, false);
         return new RespMessage.Error("WRONGPASS invalid username-password pair or user is disabled.");
     }
 

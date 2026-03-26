@@ -4,7 +4,6 @@ plugins {
     id("org.graalvm.buildtools.native") version "0.10.4"
 }
 
-val nettyVersion: String by project
 val jvectorVersion: String by project
 val onnxruntimeVersion: String by project
 val djlTokenizersVersion: String by project
@@ -44,7 +43,6 @@ repositories {
 
 dependencies {
     // Implementation
-    implementation("io.netty:netty-all:$nettyVersion")
     implementation("io.github.jbellis:jvector:$jvectorVersion")
     implementation("com.microsoft.onnxruntime:onnxruntime:$onnxruntimeVersion")
     implementation("ai.djl.huggingface:tokenizers:$djlTokenizersVersion")
@@ -142,14 +140,6 @@ graalvmNative {
                     // ── Resources to bundle in the binary ──
                     "-H:IncludeResources=models/.*",
                     "-H:IncludeResources=logback.xml",
-
-                    // ── Netty: let Netty's own META-INF/native-image configs handle most classes.
-                    // Add specific packages that fail at build-time. ──
-                    "--initialize-at-run-time=io.netty.buffer",
-                    "--initialize-at-run-time=io.netty.channel",
-                    "--initialize-at-run-time=io.netty.handler",
-                    "--initialize-at-run-time=io.netty.resolver",
-                    "--initialize-at-run-time=io.netty.bootstrap",
 
                     // ── ONNX Runtime: JNI-heavy, must init at runtime ──
                     "--initialize-at-run-time=ai.onnxruntime",

@@ -5,7 +5,7 @@ import io.agentis.memory.command.server.HelloCommand;
 import io.agentis.memory.resp.RespMessage;
 import io.agentis.memory.store.KvStore;
 import io.agentis.memory.store.StoreValue;
-import io.netty.channel.ChannelHandlerContext;
+import io.agentis.memory.resp.ClientConnection;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 
@@ -25,7 +25,7 @@ public class SMembersCommand implements CommandHandler {
     }
 
     @Override
-    public RespMessage handle(ChannelHandlerContext ctx, List<byte[]> args) {
+    public RespMessage handle(ClientConnection conn, List<byte[]> args) {
         if (args.size() < 2) {
             return new RespMessage.Error("ERR wrong number of arguments for 'SMEMBERS'");
         }
@@ -33,14 +33,14 @@ public class SMembersCommand implements CommandHandler {
         try {
             StoreValue.SetValue sv = kvStore.getSet(key);
             if (sv == null) {
-                Integer version = ctx != null ? ctx.channel().attr(HelloCommand.PROTOCOL_VERSION).get() : 2;
+                Integer version = conn != null ? (Integer) conn.getAttribute(HelloCommand.PROTOCOL_VERSION) : 2;
                 if (version != null && version == 3) {
                     return new RespMessage.RespSet(java.util.Set.of());
                 }
                 return new RespMessage.RespArray(List.of());
             }
 
-            Integer version = ctx != null ? ctx.channel().attr(HelloCommand.PROTOCOL_VERSION).get() : 2;
+            Integer version = conn != null ? (Integer) conn.getAttribute(HelloCommand.PROTOCOL_VERSION) : 2;
             if (version != null && version == 3) {
                 java.util.Set<RespMessage> elements = sv.members().stream()
                         .map(m -> (RespMessage) new RespMessage.BulkString(m.getBytes(StandardCharsets.UTF_8)))

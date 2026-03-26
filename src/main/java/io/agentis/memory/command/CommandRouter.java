@@ -1,11 +1,10 @@
 package io.agentis.memory.command;
 
-import io.agentis.memory.command.kv.AuthCommand;
 import io.agentis.memory.config.ServerConfig;
+import io.agentis.memory.resp.ClientConnection;
 import io.agentis.memory.resp.RespMessage;
 import io.agentis.memory.store.AofWriter;
 import io.agentis.memory.store.SnapshotManager;
-import io.netty.channel.ChannelHandlerContext;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import org.slf4j.Logger;
@@ -43,7 +42,7 @@ public class CommandRouter {
         log.info("Registered {} command handlers (including aliases)", handlers.size());
     }
 
-    public RespMessage dispatch(ChannelHandlerContext ctx, RespMessage msg) {
+    public RespMessage dispatch(ClientConnection conn, RespMessage msg) {
         if (!(msg instanceof RespMessage.RespArray array) || array.elements() == null || array.elements().isEmpty()) {
             return new RespMessage.Error("ERR protocol error: expected array");
         }
@@ -64,9 +63,9 @@ public class CommandRouter {
         String name = new String(args.getFirst()).toUpperCase();
 
         // Auth check: if requirepass is set, ensure client is authenticated
-        if (ctx != null && config.requirepass != null && !config.requirepass.isBlank()
+        if (conn != null && config.requirepass != null && !config.requirepass.isBlank()
                 && !NO_AUTH_COMMANDS.contains(name)) {
-            Boolean authenticated = ctx.channel().attr(AuthCommand.AUTHENTICATED).get();
+            Boolean authenticated = (Boolean) conn.getAttribute("authenticated");
             if (!Boolean.TRUE.equals(authenticated)) {
                 return new RespMessage.Error("NOAUTH Authentication required.");
             }
@@ -74,24 +73,24 @@ public class CommandRouter {
 
         CommandHandler handler = handlers.get(name);
         if (handler == null) {
-            if (ctx != null) {
-                log.warn("Unknown command '{}' from {}", name, ctx.channel().remoteAddress());
+            if (conn != null) {
+                log.warn("Unknown command '{}' from {}", name, conn.remoteAddress());
             } else {
                 log.warn("Unknown command '{}' during recovery", name);
             }
             return new RespMessage.Error("ERR unknown command '" + name + "'");
         }
 
-        RespMessage response = handler.handle(ctx, args);
+        RespMessage response = handler.handle(conn, args);
         if (response instanceof RespMessage.Error err) {
-            if (ctx != null) {
-                log.warn("CMD {} from {} → ERROR: {}", name, ctx.channel().remoteAddress(), err.message());
+            if (conn != null) {
+                log.warn("CMD {} from {} → ERROR: {}", name, conn.remoteAddress(), err.message());
             } else {
                 log.warn("CMD {} during recovery → ERROR: {}", name, err.message());
             }
         } else {
-            if (ctx != null) {
-                log.info("CMD {} from {} → {}", name, ctx.channel().remoteAddress(), describeResponse(response));
+            if (conn != null) {
+                log.info("CMD {} from {} → {}", name, conn.remoteAddress(), describeResponse(response));
                 if (handler.isWriteCommand()) {
                     aofWriter.append(args);
                     snapshotManager.incrementDirty();
@@ -114,6 +113,7 @@ public class CommandRouter {
 
     private static String describeResponse(RespMessage response) {
         return switch (response) {
+            case null -> "null";
             case RespMessage.SimpleString s -> s.value();
             case RespMessage.RespInteger i -> String.valueOf(i.value());
             case RespMessage.BulkString b -> b.value() == null ? "nil" : "(bulk " + b.value().length + "b)";

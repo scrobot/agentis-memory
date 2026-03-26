@@ -3,9 +3,8 @@ package io.agentis.memory.command.server;
 import io.agentis.memory.command.CommandHandler;
 import io.agentis.memory.command.kv.AuthCommand;
 import io.agentis.memory.config.ServerConfig;
+import io.agentis.memory.resp.ClientConnection;
 import io.agentis.memory.resp.RespMessage;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.util.AttributeKey;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 
@@ -19,7 +18,7 @@ import java.util.Map;
 @Singleton
 public class HelloCommand implements CommandHandler {
 
-    public static final AttributeKey<Integer> PROTOCOL_VERSION = AttributeKey.valueOf("protocol_version");
+    public static final String PROTOCOL_VERSION = "protocol_version";
 
     private final ServerConfig config;
 
@@ -29,7 +28,7 @@ public class HelloCommand implements CommandHandler {
     }
 
     @Override
-    public RespMessage handle(ChannelHandlerContext ctx, List<byte[]> args) {
+    public RespMessage handle(ClientConnection conn, List<byte[]> args) {
         int version = 2; // Default
         if (args.size() > 1) {
             try {
@@ -57,8 +56,8 @@ public class HelloCommand implements CommandHandler {
                         return new RespMessage.Error("WRONGPASS invalid username-password pair or user is disabled.");
                     }
                 }
-                if (ctx != null) {
-                    ctx.channel().attr(AuthCommand.AUTHENTICATED).set(true);
+                if (conn != null) {
+                    conn.setAttribute(AuthCommand.AUTHENTICATED, true);
                 }
                 i += 2;
             } else if ("SETNAME".equals(arg)) {
@@ -70,15 +69,15 @@ public class HelloCommand implements CommandHandler {
             }
         }
 
-        if (ctx != null) {
-            ctx.channel().attr(PROTOCOL_VERSION).set(version);
+        if (conn != null) {
+            conn.setAttribute(PROTOCOL_VERSION, version);
         }
 
         Map<RespMessage, RespMessage> info = new LinkedHashMap<>();
         info.put(new RespMessage.SimpleString("server"), new RespMessage.SimpleString("agentis-memory"));
         info.put(new RespMessage.SimpleString("version"), new RespMessage.SimpleString("0.1.0"));
         info.put(new RespMessage.SimpleString("proto"), new RespMessage.RespInteger(version));
-        info.put(new RespMessage.SimpleString("id"), new RespMessage.RespInteger(ctx != null ? ctx.channel().hashCode() : 0));
+        info.put(new RespMessage.SimpleString("id"), new RespMessage.RespInteger(conn != null ? conn.hashCode() : 0));
         info.put(new RespMessage.SimpleString("mode"), new RespMessage.SimpleString("standalone"));
         info.put(new RespMessage.SimpleString("role"), new RespMessage.SimpleString("master"));
         info.put(new RespMessage.SimpleString("modules"), new RespMessage.RespArray(List.of()));

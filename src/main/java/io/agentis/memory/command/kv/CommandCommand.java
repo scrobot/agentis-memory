@@ -2,7 +2,7 @@ package io.agentis.memory.command.kv;
 
 import io.agentis.memory.command.CommandHandler;
 import io.agentis.memory.resp.RespMessage;
-import io.netty.channel.ChannelHandlerContext;
+import io.agentis.memory.resp.ClientConnection;
 import jakarta.inject.Singleton;
 
 import java.util.List;
@@ -13,7 +13,7 @@ import java.util.List;
 public class CommandCommand implements CommandHandler {
 
     @Override
-    public RespMessage handle(ChannelHandlerContext ctx, List<byte[]> args) {
+    public RespMessage handle(ClientConnection conn, List<byte[]> args) {
         return new RespMessage.RespArray(List.of());
     }
 

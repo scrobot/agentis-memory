@@ -5,7 +5,7 @@ import io.agentis.memory.config.ServerConfig;
 import io.agentis.memory.resp.RespMessage;
 import io.agentis.memory.store.KvStore;
 import io.agentis.memory.vector.VectorEngine;
-import io.netty.channel.ChannelHandlerContext;
+import io.agentis.memory.resp.ClientConnection;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 
@@ -30,7 +30,7 @@ public class MemSaveCommand implements CommandHandler {
     }
 
     @Override
-    public RespMessage handle(ChannelHandlerContext ctx, List<byte[]> args) {
+    public RespMessage handle(ClientConnection conn, List<byte[]> args) {
         if (args.size() != 3) {
             return new RespMessage.Error("ERR wrong number of arguments for 'MEMSAVE' command");
         }

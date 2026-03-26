@@ -2,18 +2,21 @@ package io.agentis.memory.resp;
 
 import io.agentis.memory.command.CommandRouter;
 import io.agentis.memory.config.ServerConfig;
-import io.netty.bootstrap.ServerBootstrap;
-import io.netty.channel.*;
-import io.netty.channel.nio.NioEventLoopGroup;
-import io.netty.channel.socket.SocketChannel;
-import io.netty.channel.socket.nio.NioServerSocketChannel;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicBoolean;
+
 /**
- * Netty TCP server: bind, pipeline setup.
+ * TCP server using virtual threads and plain ServerSocket.
+ * Replaces Netty ServerBootstrap — zero native dependencies, zero reflection issues.
  */
 @Singleton
 public class RespServer {
@@ -21,9 +24,9 @@ public class RespServer {
 
     private final ServerConfig config;
     private final CommandRouter router;
-    private Channel serverChannel;
-    private EventLoopGroup bossGroup;
-    private EventLoopGroup workerGroup;
+    private ServerSocket serverSocket;
+    private final AtomicBoolean stopped = new AtomicBoolean(false);
+    private final CountDownLatch shutdownLatch = new CountDownLatch(1);
 
     @Inject
     public RespServer(ServerConfig config, CommandRouter router) {
@@ -31,52 +34,84 @@ public class RespServer {
         this.router = router;
     }
 
-    public void start() throws InterruptedException {
-        // Force early init of ByteBufAllocator to surface the real error
-        // (NoClassDefFoundError hides the original ExceptionInInitializerError)
-        try {
-            Class.forName("io.netty.buffer.ByteBufAllocator");
-        } catch (ExceptionInInitializerError e) {
-            log.error("ByteBufAllocator init failed — root cause:", e.getCause());
-            throw new RuntimeException("Netty buffer init failed", e.getCause());
-        } catch (Throwable t) {
-            log.error("ByteBufAllocator class load failed:", t);
-        }
-
-        bossGroup = new NioEventLoopGroup(1);
-        workerGroup = new NioEventLoopGroup();
-
-        ServerBootstrap bootstrap = new ServerBootstrap()
-                .group(bossGroup, workerGroup)
-                .channel(NioServerSocketChannel.class)
-                .childHandler(new ChannelInitializer<SocketChannel>() {
-                    @Override
-                    protected void initChannel(SocketChannel ch) {
-                        ch.pipeline()
-                                .addLast(new RespDecoder())
-                                .addLast(new RespEncoder())
-                                .addLast(new CommandDispatcher(router));
-                    }
-                });
-
-        serverChannel = bootstrap
-                .bind(config.bind, config.port)
-                .sync()
-                .channel();
+    public void start() throws IOException {
+        serverSocket = new ServerSocket();
+        serverSocket.setReuseAddress(true);
+        serverSocket.bind(new InetSocketAddress(config.bind, config.port));
 
         log.info("Agentis Memory listening on {}:{}", config.bind, config.port);
-        // serverChannel.closeFuture().sync(); // Don't block here!
+
+        // Accept loop runs on its own virtual thread
+        Thread.startVirtualThread(() -> {
+            try {
+                while (!stopped.get()) {
+                    Socket socket = serverSocket.accept();
+                    Thread.startVirtualThread(() -> handleConnection(socket));
+                }
+            } catch (IOException e) {
+                if (!stopped.get()) {
+                    log.error("Accept loop error", e);
+                }
+            } finally {
+                shutdownLatch.countDown();
+            }
+        });
+    }
+
+    private void handleConnection(Socket socket) {
+        ClientConnection conn = new SocketClientConnection(socket);
+        log.debug("Client connected: {}", conn.remoteAddress());
+
+        try (socket) {
+            RespParser parser = new RespParser(socket.getInputStream());
+            RespWriter writer = new RespWriter(socket.getOutputStream());
+
+            while (!stopped.get()) {
+                RespMessage msg = parser.readMessage();
+                if (msg == null) break; // clean disconnect
+
+                try {
+                    RespMessage response = router.dispatch(conn, msg);
+                    if (response != null) {
+                        writer.write(response);
+                        writer.flush();
+                    }
+                } catch (QuitException _) {
+                    // QUIT command: write +OK, then close
+                    writer.write(new RespMessage.SimpleString("OK"));
+                    writer.flush();
+                    break;
+                } catch (Exception e) {
+                    log.error("Error dispatching command from {}", conn.remoteAddress(), e);
+                    try {
+                        writer.write(new RespMessage.Error("ERR internal error: " + e.getMessage()));
+                        writer.flush();
+                    } catch (IOException writeErr) {
+                        break; // can't write to client, give up
+                    }
+                }
+            }
+        } catch (IOException e) {
+            if (!stopped.get()) {
+                log.debug("Client disconnected: {} ({})", conn.remoteAddress(), e.getMessage());
+            }
+        }
+
+        log.debug("Client disconnected: {}", conn.remoteAddress());
     }
 
     public void shutdown() {
-        if (serverChannel != null) serverChannel.close();
-        if (bossGroup != null) bossGroup.shutdownGracefully();
-        if (workerGroup != null) workerGroup.shutdownGracefully();
+        stopped.set(true);
+        if (serverSocket != null) {
+            try {
+                serverSocket.close();
+            } catch (IOException e) {
+                log.warn("Error closing server socket", e);
+            }
+        }
     }
 
     public void waitForShutdown() throws InterruptedException {
-        if (serverChannel != null) {
-            serverChannel.closeFuture().sync();
-        }
+        shutdownLatch.await();
     }
 }

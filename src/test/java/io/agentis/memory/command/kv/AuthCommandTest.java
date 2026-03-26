@@ -1,10 +1,9 @@
 package io.agentis.memory.command.kv;
 
 import io.agentis.memory.config.ServerConfig;
+import io.agentis.memory.resp.ClientConnection;
 import io.agentis.memory.resp.RespMessage;
-import io.netty.channel.embedded.EmbeddedChannel;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.ChannelInboundHandlerAdapter;
+import io.agentis.memory.resp.SocketClientConnection;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -15,12 +14,12 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class AuthCommandTest {
 
-    private ChannelHandlerContext ctx;
+    private ClientConnection conn;
 
     @BeforeEach
-    void setUp() {
-        EmbeddedChannel channel = new EmbeddedChannel(new ChannelInboundHandlerAdapter());
-        ctx = channel.pipeline().firstContext();
+    void setUp() throws Exception {
+        // Use a simple in-memory connection stub
+        conn = new StubClientConnection();
     }
 
     @Test
@@ -28,7 +27,7 @@ class AuthCommandTest {
         ServerConfig config = new ServerConfig();
         config.requirepass = null;
         AuthCommand cmd = new AuthCommand(config);
-        RespMessage result = cmd.handle(ctx, args("AUTH", "anything"));
+        RespMessage result = cmd.handle(conn, args("AUTH", "anything"));
         assertInstanceOf(RespMessage.Error.class, result);
         assertTrue(((RespMessage.Error) result).message().contains("no password is set"));
     }
@@ -38,9 +37,9 @@ class AuthCommandTest {
         ServerConfig config = new ServerConfig();
         config.requirepass = "secret";
         AuthCommand cmd = new AuthCommand(config);
-        RespMessage result = cmd.handle(ctx, args("AUTH", "secret"));
+        RespMessage result = cmd.handle(conn, args("AUTH", "secret"));
         assertEquals("OK", ((RespMessage.SimpleString) result).value());
-        assertTrue(Boolean.TRUE.equals(ctx.channel().attr(AuthCommand.AUTHENTICATED).get()));
+        assertTrue(Boolean.TRUE.equals(conn.getAttribute(AuthCommand.AUTHENTICATED)));
     }
 
     @Test
@@ -48,12 +47,29 @@ class AuthCommandTest {
         ServerConfig config = new ServerConfig();
         config.requirepass = "secret";
         AuthCommand cmd = new AuthCommand(config);
-        RespMessage result = cmd.handle(ctx, args("AUTH", "wrong"));
+        RespMessage result = cmd.handle(conn, args("AUTH", "wrong"));
         assertInstanceOf(RespMessage.Error.class, result);
-        assertFalse(Boolean.TRUE.equals(ctx.channel().attr(AuthCommand.AUTHENTICATED).get()));
+        assertFalse(Boolean.TRUE.equals(conn.getAttribute(AuthCommand.AUTHENTICATED)));
     }
 
     private List<byte[]> args(String... parts) {
         return java.util.Arrays.stream(parts).map(s -> s.getBytes(StandardCharsets.UTF_8)).toList();
+    }
+
+    /** Simple stub for unit tests — no real socket needed. */
+    private static class StubClientConnection implements ClientConnection {
+        private final java.util.concurrent.ConcurrentHashMap<String, Object> attrs = new java.util.concurrent.ConcurrentHashMap<>();
+
+        @Override
+        public String remoteAddress() { return "test:0"; }
+
+        @Override
+        public void setAttribute(String key, Object value) { attrs.put(key, value); }
+
+        @Override
+        public Object getAttribute(String key) { return attrs.get(key); }
+
+        @Override
+        public void close() {}
     }
 }

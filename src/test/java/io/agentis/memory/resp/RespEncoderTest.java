@@ -1,9 +1,9 @@
 package io.agentis.memory.resp;
 
-import io.netty.buffer.ByteBuf;
-import io.netty.buffer.Unpooled;
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -15,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 class RespEncoderTest {
 
     @Test
-    void testEncodeRESP2() {
+    void testEncodeRESP2() throws IOException {
         assertEncode(new RespMessage.SimpleString("OK"), "+OK\r\n");
         assertEncode(new RespMessage.Error("ERR"), "-ERR\r\n");
         assertEncode(new RespMessage.RespInteger(42), ":42\r\n");
@@ -25,7 +25,7 @@ class RespEncoderTest {
     }
 
     @Test
-    void testEncodeRESP3() {
+    void testEncodeRESP3() throws IOException {
         assertEncode(new RespMessage.Null(), "_\r\n");
         assertEncode(new RespMessage.Boolean(true), "#t\r\n");
         assertEncode(new RespMessage.Boolean(false), "#f\r\n");
@@ -40,11 +40,12 @@ class RespEncoderTest {
         assertEncode(new RespMessage.RespSet(Set.of(new RespMessage.SimpleString("s"))), "~1\r\n+s\r\n");
     }
 
-    private void assertEncode(RespMessage msg, String expected) {
-        ByteBuf buf = Unpooled.buffer();
-        RespEncoder encoder = new RespEncoder();
-        encoder.encode(null, msg, buf);
-        String actual = buf.toString(StandardCharsets.UTF_8);
+    private void assertEncode(RespMessage msg, String expected) throws IOException {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        RespWriter writer = new RespWriter(baos);
+        writer.write(msg);
+        writer.flush();
+        String actual = baos.toString(StandardCharsets.UTF_8);
         assertEquals(expected, actual);
     }
 }

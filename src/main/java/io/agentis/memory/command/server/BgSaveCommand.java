@@ -3,7 +3,7 @@ package io.agentis.memory.command.server;
 import io.agentis.memory.command.CommandHandler;
 import io.agentis.memory.resp.RespMessage;
 import io.agentis.memory.store.SnapshotManager;
-import io.netty.channel.ChannelHandlerContext;
+import io.agentis.memory.resp.ClientConnection;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import org.slf4j.Logger;
@@ -23,7 +23,7 @@ public class BgSaveCommand implements CommandHandler {
     }
 
     @Override
-    public RespMessage handle(ChannelHandlerContext ctx, List<byte[]> args) {
+    public RespMessage handle(ClientConnection conn, List<byte[]> args) {
         // In Redis, BGSAVE returns immediately and does work in a background process (fork).
         // Here we'll run it in a separate thread if we want it to be truly background.
         // For simplicity, let's just run it in the current thread for now or use a simple thread.

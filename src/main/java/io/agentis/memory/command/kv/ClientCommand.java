@@ -1,23 +1,22 @@
 package io.agentis.memory.command.kv;
 
 import io.agentis.memory.command.CommandHandler;
+import io.agentis.memory.resp.ClientConnection;
 import io.agentis.memory.resp.RespMessage;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.util.AttributeKey;
 import jakarta.inject.Singleton;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 // CLIENT SETNAME name | CLIENT GETNAME | CLIENT INFO
-// Client name is stored in channel attribute.
+// Client name is stored in connection attribute.
 @Singleton
 public class ClientCommand implements CommandHandler {
 
-    public static final AttributeKey<String> CLIENT_NAME = AttributeKey.valueOf("clientName");
+    public static final String CLIENT_NAME = "clientName";
 
     @Override
-    public RespMessage handle(ChannelHandlerContext ctx, List<byte[]> args) {
+    public RespMessage handle(ClientConnection conn, List<byte[]> args) {
         if (args.size() < 2) {
             return new RespMessage.Error("ERR wrong number of arguments for 'CLIENT'");
         }
@@ -28,18 +27,18 @@ public class ClientCommand implements CommandHandler {
                     yield new RespMessage.Error("ERR wrong number of arguments for 'CLIENT SETNAME'");
                 }
                 String name = new String(args.get(2));
-                ctx.channel().attr(CLIENT_NAME).set(name);
+                conn.setAttribute(CLIENT_NAME, name);
                 yield new RespMessage.SimpleString("OK");
             }
             case "GETNAME" -> {
-                String name = ctx.channel().attr(CLIENT_NAME).get();
+                String name = (String) conn.getAttribute(CLIENT_NAME);
                 yield name != null
                         ? new RespMessage.BulkString(name.getBytes(StandardCharsets.UTF_8))
                         : new RespMessage.NullBulkString();
             }
             case "INFO" -> {
-                String name = ctx.channel().attr(CLIENT_NAME).get();
-                String info = "id=1 addr=" + ctx.channel().remoteAddress()
+                String name = (String) conn.getAttribute(CLIENT_NAME);
+                String info = "id=1 addr=" + conn.remoteAddress()
                         + " cmd=client name=" + (name != null ? name : "") + "\n";
                 yield new RespMessage.BulkString(info.getBytes(StandardCharsets.UTF_8));
             }

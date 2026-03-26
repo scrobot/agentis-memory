@@ -5,7 +5,7 @@ import io.agentis.memory.command.server.HelloCommand;
 import io.agentis.memory.resp.RespMessage;
 import io.agentis.memory.store.KvStore;
 import io.agentis.memory.store.StoreValue;
-import io.netty.channel.ChannelHandlerContext;
+import io.agentis.memory.resp.ClientConnection;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 
@@ -24,7 +24,7 @@ public class SIsMemberCommand implements CommandHandler {
     }
 
     @Override
-    public RespMessage handle(ChannelHandlerContext ctx, List<byte[]> args) {
+    public RespMessage handle(ClientConnection conn, List<byte[]> args) {
         if (args.size() < 3) {
             return new RespMessage.Error("ERR wrong number of arguments for 'SISMEMBER'");
         }
@@ -34,7 +34,7 @@ public class SIsMemberCommand implements CommandHandler {
             StoreValue.SetValue sv = kvStore.getSet(key);
             boolean exists = sv != null && sv.members().contains(member);
 
-            Integer version = ctx != null ? ctx.channel().attr(HelloCommand.PROTOCOL_VERSION).get() : 2;
+            Integer version = conn != null ? (Integer) conn.getAttribute(HelloCommand.PROTOCOL_VERSION) : 2;
             if (version != null && version == 3) {
                 return new RespMessage.Boolean(exists);
             }

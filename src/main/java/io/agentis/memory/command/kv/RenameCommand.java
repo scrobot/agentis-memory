@@ -3,7 +3,7 @@ package io.agentis.memory.command.kv;
 import io.agentis.memory.command.CommandHandler;
 import io.agentis.memory.resp.RespMessage;
 import io.agentis.memory.store.KvStore;
-import io.netty.channel.ChannelHandlerContext;
+import io.agentis.memory.resp.ClientConnection;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 
@@ -22,7 +22,7 @@ public class RenameCommand implements CommandHandler {
     }
 
     @Override
-    public RespMessage handle(ChannelHandlerContext ctx, List<byte[]> args) {
+    public RespMessage handle(ClientConnection conn, List<byte[]> args) {
         String cmd = new String(args.get(0)).toUpperCase();
         if (args.size() < 3) {
             return new RespMessage.Error("ERR wrong number of arguments for '" + cmd + "'");

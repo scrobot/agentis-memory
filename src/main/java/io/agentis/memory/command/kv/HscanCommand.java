@@ -3,7 +3,7 @@ package io.agentis.memory.command.kv;
 import io.agentis.memory.command.CommandHandler;
 import io.agentis.memory.resp.RespMessage;
 import io.agentis.memory.store.KvStore;
-import io.netty.channel.ChannelHandlerContext;
+import io.agentis.memory.resp.ClientConnection;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 
@@ -22,7 +22,7 @@ public class HscanCommand implements CommandHandler {
 
     @Override
     @SuppressWarnings("unchecked")
-    public RespMessage handle(ChannelHandlerContext ctx, List<byte[]> args) {
+    public RespMessage handle(ClientConnection conn, List<byte[]> args) {
         if (args.size() < 3) {
             return new RespMessage.Error("ERR wrong number of arguments for 'hscan'");
         }
