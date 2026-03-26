@@ -3,6 +3,8 @@ package io.agentis.memory;
 import io.agentis.memory.config.ServerConfig;
 import io.agentis.memory.resp.RespServer;
 import io.agentis.memory.store.AofReader;
+import io.agentis.memory.store.AofWriter;
+import io.agentis.memory.store.SnapshotManager;
 import io.avaje.inject.BeanScope;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,15 +19,30 @@ public class AgentisMemory {
                 .bean(ServerConfig.class, config)
                 .build()) {
 
-            // Recovery from AOF before starting the server
+            // Recovery: load snapshot, then replay AOF
+            SnapshotManager snapshotManager = scope.get(SnapshotManager.class);
+            try {
+                snapshotManager.load();
+            } catch (Exception e) {
+                log.error("Failed to load snapshot", e);
+            }
+
             AofReader aofReader = scope.get(AofReader.class);
             aofReader.recover();
 
             RespServer server = scope.get(RespServer.class);
+            AofWriter aofWriter = scope.get(AofWriter.class);
 
             Runtime.getRuntime().addShutdownHook(new Thread(() -> {
                 log.info("Shutting down Agentis Memory...");
                 server.shutdown();
+                try {
+                    aofWriter.close();
+                    log.info("Taking final snapshot...");
+                    snapshotManager.save();
+                } catch (Exception e) {
+                    log.error("Error during graceful shutdown", e);
+                }
             }));
 
             try {

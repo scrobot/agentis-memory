@@ -4,6 +4,7 @@ import io.agentis.memory.command.kv.AuthCommand;
 import io.agentis.memory.config.ServerConfig;
 import io.agentis.memory.resp.RespMessage;
 import io.agentis.memory.store.AofWriter;
+import io.agentis.memory.store.SnapshotManager;
 import io.netty.channel.ChannelHandlerContext;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
@@ -25,11 +26,13 @@ public class CommandRouter {
     private final Map<String, CommandHandler> handlers = new HashMap<>();
     private final ServerConfig config;
     private final AofWriter aofWriter;
+    private final SnapshotManager snapshotManager;
 
     @Inject
-    public CommandRouter(ServerConfig config, AofWriter aofWriter, List<CommandHandler> commandHandlers) {
+    public CommandRouter(ServerConfig config, AofWriter aofWriter, SnapshotManager snapshotManager, List<CommandHandler> commandHandlers) {
         this.config = config;
         this.aofWriter = aofWriter;
+        this.snapshotManager = snapshotManager;
 
         for (CommandHandler handler : commandHandlers) {
             handlers.put(handler.name().toUpperCase(), handler);
@@ -90,6 +93,16 @@ public class CommandRouter {
                 log.info("CMD {} from {} → {}", name, ctx.channel().remoteAddress(), describeResponse(response));
                 if (handler.isWriteCommand()) {
                     aofWriter.append(args);
+                    snapshotManager.incrementDirty();
+                    if (snapshotManager.shouldSnapshot()) {
+                        new Thread(() -> {
+                            try {
+                                snapshotManager.save();
+                            } catch (Exception e) {
+                                log.error("Auto-snapshot failed", e);
+                            }
+                        }, "snapshot-worker").start();
+                    }
                 }
             } else {
                 log.debug("REPLAY CMD {} → {}", name, describeResponse(response));

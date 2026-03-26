@@ -16,6 +16,8 @@ import jakarta.inject.Singleton;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.*;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -205,6 +207,69 @@ public class HnswIndex {
     // -------------------------------------------------------------------------
     // Internal helpers
     // -------------------------------------------------------------------------
+
+    public void save(Path path) throws IOException {
+        lock.readLock().lock();
+        try {
+            try (DataOutputStream out = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(path.toFile())))) {
+                out.writeInt(chunks.size());
+                for (Chunk chunk : chunks) {
+                    out.writeUTF(chunk.parentKey());
+                    out.writeInt(chunk.index());
+                    out.writeUTF(chunk.text());
+                    out.writeInt(chunk.vector().length);
+                    for (float f : chunk.vector()) {
+                        out.writeFloat(f);
+                    }
+                    out.writeUTF(chunk.namespace());
+                }
+                out.writeInt(deletedOrdinals.size());
+                for (Integer ordinal : deletedOrdinals) {
+                    out.writeInt(ordinal);
+                }
+            }
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
+    public void load(Path path) throws IOException {
+        lock.writeLock().lock();
+        try {
+            chunks.clear();
+            vectors.clear();
+            keyToOrdinals.clear();
+            deletedOrdinals.clear();
+
+            try (DataInputStream in = new DataInputStream(new BufferedInputStream(new FileInputStream(path.toFile())))) {
+                int numChunks = in.readInt();
+                for (int i = 0; i < numChunks; i++) {
+                    String parentKey = in.readUTF();
+                    int index = in.readInt();
+                    String text = in.readUTF();
+                    int vecLen = in.readInt();
+                    float[] vector = new float[vecLen];
+                    for (int j = 0; j < vecLen; j++) {
+                        vector[j] = in.readFloat();
+                    }
+                    String namespace = in.readUTF();
+
+                    Chunk chunk = new Chunk(parentKey, index, text, vector, namespace);
+                    chunks.add(chunk);
+                    vectors.add(VTS.createFloatVector(vector));
+                    keyToOrdinals.computeIfAbsent(parentKey, k -> new ArrayList<>()).add(i);
+                }
+
+                int numDeleted = in.readInt();
+                for (int i = 0; i < numDeleted; i++) {
+                    deletedOrdinals.add(in.readInt());
+                }
+            }
+            rebuildIndex();
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
 
     /** Must be called under write lock. */
     private void rebuildIndex() {

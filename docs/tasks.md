@@ -116,28 +116,28 @@ TYPE command must return correct type. SCAN/KEYS must iterate all types. DEL/EXI
 
 ---
 
-## 🔲 Step 6: Snapshots
+## ✅ Step 6: Snapshots
 
 **Depends on:** Step 5
 
-### 🔲 6a: Snapshot Writer/Reader for KV Store
-**Files:** `SnapshotWriter.java`, `SnapshotReader.java`
+### ✅ 6a: Snapshot Writer/Reader for KV Store
+**Files:** `SnapshotManager.java` (previously `SnapshotWriter.java`, `SnapshotReader.java`)
 **Format:** `[magic "AGMM"][version uint32][entry_count uint64][entries...]`. Atomic write (temp file → rename).
 
-### 🔲 6b: HNSW Snapshot persistence
-**Behavior:** Serialize/deserialize jvector index to disk.
+### ✅ 6b: HNSW Snapshot persistence
+**Behavior:** Serialize/deserialize jvector index to disk via `HnswIndex.save()` and `HnswIndex.load()`.
 
-### 🔲 6c: Snapshot Scheduler + BGSAVE
-**Files:** `SnapshotScheduler.java`, `BgSaveCommand.java`
-**Behavior:** Auto-snapshot by interval and change threshold. BGSAVE triggers manual snapshot.
+### ✅ 6c: Snapshot Scheduler + BGSAVE
+**Files:** `SnapshotManager.java`, `BgSaveCommand.java`
+**Behavior:** Auto-snapshot by interval and change threshold (configured in `ServerConfig`). BGSAVE triggers manual snapshot.
 
-### 🔲 6d: Recovery update
-**Behavior:** New recovery order: KV snapshot → HNSW snapshot → AOF delta.
+### ✅ 6d: Recovery update
+**Behavior:** New recovery order in `AgentisMemory`: KV snapshot → HNSW snapshot → AOF delta.
 
-### 🔲 6e: Graceful Shutdown
-**Behavior:** Stop connections → wait in-flight (5s) → cancel pending embeddings → flush AOF → final snapshot → exit.
+### ✅ 6e: Graceful Shutdown
+**Behavior:** Stop connections → wait in-flight (5s) → cancel pending embeddings → flush AOF → final snapshot → exit. Implementation in `AgentisMemory.shutdown()`.
 
-**Test:** Write 1000 keys + MEMSAVE 10 → BGSAVE → add 10 more → restart → all present.
+**Test:** `SnapshotManagerTest.java` (unit), `SnapshotIntegrationTest.java` (Docker integration).
 
 ---
 
