@@ -12,7 +12,7 @@
 
 ---
 
-## 🔲 Step 2: Data Type Support
+## ✅ Step 2: Data Type Support
 
 All data types share a unified key namespace. Each key has exactly one type. Commands against the wrong type return `WRONGTYPE Operation against a key holding the wrong kind of value`.
 
@@ -56,21 +56,21 @@ TYPE command must return correct type. SCAN/KEYS must iterate all types. DEL/EXI
 **Spec:** [docs/commands/strings-basic.md](commands/strings-basic.md) — full SET syntax
 **Test:** SET with NX (set only if not exists), XX (set only if exists), PX (ms TTL), GET (return old value).
 
-### 🔲 2j: Redis Insight sample data validation
+### ✅ 2j: Redis Insight sample data validation
 **Test:** Connect Redis Insight, load default sample data. No unknown command errors. All data visible in UI. This is the integration gate for Step 2.
 
 **Parallelization for Step 2:** 2a must be done first. After 2a, tasks 2b through 2i can all run in parallel (separate data types, separate files, no conflicts). 2j is the final validation after all are merged.
 
 ---
 
-## 🔲 Step 3: Chunker + HNSW Index
+## ✅ Step 3: Chunker + HNSW Index
 
-### 🔲 3a: Chunker
+### ✅ 3a: Chunker
 **Spec:** Sentence splitting with overlap. See design spec section "Vector Engine > Chunker".
 **Files:** `Chunk.java`, `Chunker.java`
 **Test:** Short text → 1 chunk. Long text → multiple. Overlap verified. `extractNamespace()` works.
 
-### 🔲 3b: HNSW Index
+### ✅ 3b: HNSW Index
 **Spec:** jvector-based HNSW. See design spec section "Vector Engine > HNSW Index".
 **Files:** `HnswIndex.java`
 **Test:** Add/remove/search. Namespace filtering. Over-fetch 3x. Random vectors (no Embedder needed).
@@ -79,18 +79,21 @@ TYPE command must return correct type. SCAN/KEYS must iterate all types. DEL/EXI
 
 ---
 
-## 🔲 Step 4: MEMSAVE / MEMQUERY / MEMDEL / MEMSTATUS
+## ✅ Step 4: MEMSAVE / MEMQUERY / MEMDEL / MEMSTATUS
 
 **Depends on:** Steps 2a (multi-type store) and 3 (Chunker + HNSW)
 **Spec:** [docs/commands/custom.md](commands/custom.md)
 
-### 🔲 4a: VectorEngine coordinator
+### ✅ 4a: VectorEngine coordinator
 **Files:** `VectorEngine.java`
 **Behavior:** Async indexation pipeline (chunker → embedder → HNSW), status tracking, cancellation, orphan cleanup.
 
-### 🔲 4b: Custom command handlers
+### ✅ 4b: Custom command handlers
 **Files:** `MemSaveCommand.java`, `MemQueryCommand.java`, `MemDelCommand.java`, `MemStatusCommand.java`
 **Test:** E2E via Jedis — MEMSAVE → wait → MEMQUERY finds result. Namespace filtering. MEMDEL → MEMQUERY empty.
+
+### ✅ 4c: VectorEngine & Model Integration Tests
+**Test:** `VectorModelIntegrationTest.java` — verifies full async pipeline with real ONNX model.
 
 ---
 
@@ -138,6 +141,42 @@ TYPE command must return correct type. SCAN/KEYS must iterate all types. DEL/EXI
 
 ---
 
+## 🔲 Step 8: RESP3 Protocol Support
+
+**Depends on:** Step 2 (all data types implemented)
+
+### 🔲 8a: HELLO command
+**Spec:** Implement `HELLO [protover [AUTH username password] [SETNAME clientname]]`. Client sends `HELLO 2` or `HELLO 3` to negotiate protocol version. Response is a map with server info (server, version, proto, id, mode, role, modules). Per-connection protocol state tracking.
+**Test:** `HELLO 2` → valid response, connection stays RESP2. `HELLO 3` → valid response, connection switches to RESP3. `HELLO` without args → returns server info in current protocol.
+
+### 🔲 8b: RESP3 encoder
+**Spec:** Add RESP3 wire types to `RespMessage` sealed interface and `RespEncoder`:
+- Map (`%`): `%2\r\n+key1\r\n:1\r\n+key2\r\n:2\r\n`
+- Set (`~`): `~3\r\n+a\r\n+b\r\n+c\r\n`
+- Null (`_\r\n`), Boolean (`#t\r\n` / `#f\r\n`), Double (`,3.14\r\n`)
+- Verbatim String (`=15\r\ntxt:Some string\r\n`)
+- Big Number (`(3492890328409238509324850943850943825024385\r\n`)
+- Push (`>`) for pub/sub (future)
+
+**Test:** Encode/decode round-trip for each new type. Verify wire format matches Redis spec.
+
+### 🔲 8c: RESP3-aware command responses
+**Spec:** When connection is in RESP3 mode, commands return richer types:
+- HGETALL → Map instead of flat array
+- SMEMBERS → Set instead of array
+- SISMEMBER → Boolean instead of integer
+- ZSCORE → Double instead of bulk string
+- Null values → Null type instead of NullBulkString
+
+Per-connection `protocolVersion` field in `CommandDispatcher`; command handlers check it to choose response format.
+**Test:** Same command returns different wire format depending on HELLO negotiation. Jedis/Lettuce integration test in RESP3 mode.
+
+### 🔲 8d: RESP3 decoder
+**Spec:** Extend `RespDecoder` to parse incoming RESP3 types (for completeness and client-to-server maps in future commands).
+**Test:** Decoder handles all RESP3 types. Mixed RESP2/RESP3 connections on same port.
+
+---
+
 ## 🔲 Step 7: GraalVM Native Image
 
 **Depends on:** Step 6
@@ -154,31 +193,6 @@ TYPE command must return correct type. SCAN/KEYS must iterate all types. DEL/EXI
 ### 🔲 7d: Docker image
 **Files:** `Dockerfile`
 **Test:** `docker build` + `docker run` + redis-cli smoke test.
-
----
-
-## 🔲 Step 8: Benchmark Module
-
-**Depends on:** Steps 2 (all commands) + Step 4 (MEMSAVE/MEMQUERY)
-**Spec:** [docs/superpowers/specs/2026-03-26-benchmark-design.md](superpowers/specs/2026-03-26-benchmark-design.md)
-
-### 🔲 8a: Benchmark infrastructure
-**Files:** `benchmark/build.gradle.kts`, `BenchmarkRunner.java`, `BenchmarkConfig.java`, `BenchmarkResult.java`, `BenchmarkReport.java`, `LatencyRecorder.java`, `ServerManager.java`
-**Task:** Gradle submodule, CLI args parsing, Testcontainers Redis setup, HdrHistogram latency recording, side-by-side console + JSON report formatting.
-
-### 🔲 8b: Standard command scenarios
-**Files:** `StringsScenario.java`, `HashScenario.java`, `ListScenario.java`, `SortedSetScenario.java`, `SetScenario.java`
-**Task:** Benchmarks for each data type against both Agentis Memory and Redis.
-
-### 🔲 8c: Mixed workload + Pipeline scenarios
-**Files:** `MixedWorkloadScenario.java`, `PipelineScenario.java`
-**Task:** Realistic mixed workload (40% GET, 20% SET, etc.) and pipeline batching benchmarks.
-
-### 🔲 8d: Memory commands scenario (Agentis-only)
-**Files:** `MemoryCommandsScenario.java`
-**Task:** MEMSAVE latency (sync + indexation time), MEMQUERY latency vs corpus size, recall@10 measurement.
-
-**Test:** `./gradlew :benchmark:run` completes without errors, produces side-by-side report.
 
 ---
 
@@ -200,18 +214,19 @@ Step 2a (refactor multi-type store)
 Step 3a Chunker ──┐
 Step 3b HNSW ─────┤
                   ▼
-            Step 4 (MEMSAVE/MEMQUERY) ──┐
-                  │                     │
-                  ▼                     ▼
-            Step 5 (AOF)          Step 8 (Benchmark)
+            Step 4 (MEMSAVE/MEMQUERY)
+                  │
+                  ▼
+            Step 5 (AOF)
                   │
                   ▼
             Step 6 (Snapshots + Shutdown)
                   │
                   ▼
             Step 7 (GraalVM Native Image)
+
+Step 2 (all types) ──► Step 8 (RESP3 Protocol — can run in parallel with Steps 3-7)
 ```
 
 Steps 2 and 3 can run fully in parallel.
 Within Step 2, tasks 2b-2i can run in parallel after 2a.
-Step 8 (Benchmark) can run in parallel with Steps 5-7 (persistence).

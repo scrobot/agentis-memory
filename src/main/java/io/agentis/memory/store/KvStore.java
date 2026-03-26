@@ -30,8 +30,12 @@ public class KvStore {
     }
 
     public void set(String key, byte[] value, long ttlSeconds) {
+        set(key, value, ttlSeconds, false);
+    }
+
+    public void set(String key, byte[] value, long ttlSeconds, boolean hasVectorIndex) {
         long expireAt = ttlSeconds > 0 ? System.currentTimeMillis() + (ttlSeconds * 1000) : -1;
-        store.put(key, new Entry(new StoreValue.StringValue(value), System.currentTimeMillis(), expireAt, false));
+        store.put(key, new Entry(new StoreValue.StringValue(value), System.currentTimeMillis(), expireAt, hasVectorIndex));
     }
 
     /**
@@ -306,7 +310,17 @@ public class KvStore {
         }
     }
 
-    public int size() {
+    public boolean exists(String key) {
+        Entry e = store.get(key);
+        if (e == null) return false;
+        if (e.isExpired()) {
+            store.remove(key);
+            return false;
+        }
+        return true;
+    }
+
+    public long size() {
         return store.size();
     }
 

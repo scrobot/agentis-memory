@@ -58,7 +58,7 @@ public class InfoCommand implements CommandHandler {
         }
 
         if (section.equals("all") || section.equals("keyspace")) {
-            int keys = kvStore.size();
+            long keys = kvStore.size();
             sb.append("# Keyspace\r\n");
             if (keys > 0) {
                 sb.append("db0:keys=").append(keys).append(",expires=0,avg_ttl=0\r\n");

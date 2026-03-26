@@ -6,6 +6,9 @@ import ai.onnxruntime.OnnxTensor;
 import ai.onnxruntime.OrtEnvironment;
 import ai.onnxruntime.OrtSession;
 
+import io.agentis.memory.config.ServerConfig;
+import jakarta.inject.Inject;
+import jakarta.inject.Singleton;
 import java.nio.LongBuffer;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -17,11 +20,24 @@ import java.util.Map;
  * Generates 384-dim normalized float vectors from text using all-MiniLM-L6-v2 via ONNX Runtime.
  * Thread-safe for concurrent inference calls.
  */
+@Singleton
 public class Embedder implements AutoCloseable {
 
     private final OrtEnvironment env;
     private final OrtSession session;
     private final HuggingFaceTokenizer tokenizer;
+
+    @Inject
+    public Embedder(ServerConfig config) throws Exception {
+        this.env = OrtEnvironment.getEnvironment();
+
+        try (OrtSession.SessionOptions opts = new OrtSession.SessionOptions()) {
+            opts.setIntraOpNumThreads(config.embeddingThreads);
+            Path modelDir = config.modelPath != null ? config.modelPath : Path.of("models");
+            this.session = env.createSession(modelDir.resolve("model.onnx").toString(), opts);
+            this.tokenizer = HuggingFaceTokenizer.newInstance(modelDir.resolve("tokenizer.json"));
+        }
+    }
 
     /**
      * @param modelDir        directory containing model.onnx, tokenizer.json

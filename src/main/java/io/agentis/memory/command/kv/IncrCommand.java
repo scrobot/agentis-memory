@@ -27,7 +27,7 @@ public class IncrCommand implements CommandHandler {
 
     @Override
     public RespMessage handle(ChannelHandlerContext ctx, List<byte[]> args) {
-        String cmd = new String(args.get(0)).toUpperCase();
+        String cmd = new String(args.getFirst()).toUpperCase();
         return switch (cmd) {
             case "INCR"        -> handleIncr(args, 1L);
             case "DECR"        -> handleIncr(args, -1L);

@@ -81,6 +81,27 @@ public class HnswIndex {
             chunks.add(chunk);
             vectors.add(VTS.createFloatVector(chunk.vector()));
             keyToOrdinals.computeIfAbsent(chunk.parentKey(), k -> new ArrayList<>()).add(ordinal);
+            // Rebuilding after every chunk is expensive. 
+            // For now it is okay, but if indexing many chunks, it's a bottleneck.
+            rebuildIndex();
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    /**
+     * Adds multiple chunks for the same key. Rebuilds once.
+     */
+    public void addBatch(List<Chunk> batch) {
+        if (batch.isEmpty()) return;
+        lock.writeLock().lock();
+        try {
+            for (Chunk chunk : batch) {
+                int ordinal = chunks.size();
+                chunks.add(chunk);
+                vectors.add(VTS.createFloatVector(chunk.vector()));
+                keyToOrdinals.computeIfAbsent(chunk.parentKey(), k -> new ArrayList<>()).add(ordinal);
+            }
             rebuildIndex();
         } finally {
             lock.writeLock().unlock();
