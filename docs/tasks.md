@@ -24,7 +24,7 @@ TYPE command must return correct type. SCAN/KEYS must iterate all types. DEL/EXI
 **Spec:** Refactor `Entry` and `KvStore` to support multiple value types. `Entry.value` changes from `byte[]` to a polymorphic type. All existing string commands continue to work. TYPE returns `string` for existing keys.
 **Test:** All existing tests pass. TYPE returns `string`.
 
-### 🔲 2b: Hash commands 🔀 (after 2a)
+### ✅ 2b: Hash commands 🔀 (after 2a)
 **Spec:** [docs/commands/hashes.md](commands/hashes.md) — 14 commands
 **Test:** Unit test per command. Integration test: HSET/HGET/HGETALL/HDEL via Jedis. TYPE returns `hash`.
 
