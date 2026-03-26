@@ -82,7 +82,6 @@ public class KvStore {
         return store;
     }
 
-<<<<<<< HEAD
     // ── Hash operations ───────────────────────────────────────────────────────
 
     private static final String WRONGTYPE = "WRONGTYPE Operation against a key holding the wrong kind of value";
@@ -329,13 +328,9 @@ public class KvStore {
         }
         sb.append("$");
         return java.util.regex.Pattern.compile(sb.toString());
-=======
-    // -------------------------------------------------------------------------
-    // List operations
-    // -------------------------------------------------------------------------
+    }
 
-    private static final String WRONGTYPE_MSG =
-            "WRONGTYPE Operation against a key holding the wrong kind of value";
+    // ── List operations ──────────────────────────────────────────────────────
 
     /**
      * Returns the ListValue for {@code key}, throwing if the key holds a non-list value.
@@ -346,7 +341,7 @@ public class KvStore {
         if (e == null) return null;
         if (e.isExpired()) { store.remove(key); return null; }
         if (!(e.value() instanceof StoreValue.ListValue lv)) {
-            throw new WrongTypeException(WRONGTYPE_MSG);
+            throw new WrongTypeException(WRONGTYPE);
         }
         return lv;
     }
@@ -361,7 +356,7 @@ public class KvStore {
             return lv;
         }
         if (!(e.value() instanceof StoreValue.ListValue lv)) {
-            throw new WrongTypeException(WRONGTYPE_MSG);
+            throw new WrongTypeException(WRONGTYPE);
         }
         return lv;
     }
@@ -588,6 +583,5 @@ public class KvStore {
     /** Thrown when an operation is issued against a key of the wrong type. */
     public static class WrongTypeException extends RuntimeException {
         public WrongTypeException(String message) { super(message); }
->>>>>>> air/complete-task-2c-and-commit-changes-907076cc-c
     }
 }
