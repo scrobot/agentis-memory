@@ -41,11 +41,23 @@ public class KvStore {
         return e.value;
     }
 
-    public void delete(String key) {
-        store.remove(key);
+    public boolean delete(String key) {
+        return store.remove(key) != null;
     }
-
+    public boolean expire(String key, long seconds) {
+        Entry e = store.get(key);
+        if (e == null || e.isExpired()) {
+            store.remove(key);
+            return false;
+        }
+        long expireAt = System.currentTimeMillis() + (seconds * 1000);
+        store.put(key, new Entry(e.value(), e.createdAt(), expireAt, e.hasVectorIndex()));
+        return true;
+    }
     public int size() {
         return store.size();
+    }
+    public ConcurrentHashMap<String, Entry> getStore() {
+        return store;
     }
 }
