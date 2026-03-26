@@ -63,7 +63,7 @@ services:
       - bench-net
 
   memtier:
-    image: redislabs/memtier_benchmark:latest
+    image: redislabs/memtier_benchmark:2.1.0
     container_name: bench-memtier
     depends_on:
       agentis-memory:

@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 # ─── Config ───────────────────────────────────────────────────────────────────
-SERVERS=("agentis-memory:6399" "redis:6379" "dragonfly:6380" "lux:6381")
+SERVERS=("agentis-memory:6399" "redis:6379" "dragonfly:6379" "lux:6379")
 SERVER_NAMES=("agentis_memory" "redis" "dragonfly" "lux")
 SCENARIOS=("strings" "hashes" "lists" "sorted-sets" "sets" "mixed-workload")
 PIPELINES=(1 10 50 100)
@@ -17,18 +17,29 @@ REPORTS_DIR="reports"
 log() { echo "[$(date '+%H:%M:%S')] $*"; }
 
 run_memtier() {
-  local host="$1"; local port="$2"; local extra_args="$3"; local out_file="$4"
+  local host="$1"; local port="$2"; local extra_args="$3"
+  local local_out="$4"  # path on host
+  local container_out="/tmp/memtier_result.json"
+
   docker compose exec -T memtier memtier_benchmark \
     -s "$host" -p "$port" \
     $extra_args \
-    --json-out-file="$out_file" \
+    --json-out-file="$container_out" \
     --hide-histogram \
-    2>&1 | tail -5 || true
+    2>&1 | tail -12 || true
+
+  # Copy result from container to host
+  docker cp bench-memtier:"$container_out" "$local_out" 2>/dev/null || true
 }
 
 flush_server() {
   local host="$1"; local port="$2"
-  docker compose exec -T memtier redis-cli -h "$host" -p "$port" FLUSHALL > /dev/null 2>&1 || true
+  docker compose exec -T redis redis-cli -h "$host" -p "$port" FLUSHALL > /dev/null 2>&1 || true
+}
+
+ping_server() {
+  local host="$1"; local port="$2"
+  docker compose exec -T redis redis-cli -h "$host" -p "$port" PING > /dev/null 2>&1
 }
 
 # ─── Preflight ────────────────────────────────────────────────────────────────
@@ -50,10 +61,10 @@ docker compose ps
 
 # Wait explicitly (healthchecks may not be enough for slow builds)
 for i in {1..60}; do
-  if docker compose exec -T memtier redis-cli -h agentis-memory -p 6399 PING > /dev/null 2>&1 && \
-     docker compose exec -T memtier redis-cli -h redis        -p 6379 PING > /dev/null 2>&1 && \
-     docker compose exec -T memtier redis-cli -h dragonfly    -p 6379 PING > /dev/null 2>&1 && \
-     docker compose exec -T memtier redis-cli -h lux          -p 6379 PING > /dev/null 2>&1; then
+  if ping_server agentis-memory 6399 && \
+     ping_server redis        6379 && \
+     ping_server dragonfly    6379 && \
+     ping_server lux          6379; then
     log "All servers are up."
     break
   fi
@@ -72,7 +83,7 @@ for i in "${!SERVERS[@]}"; do
   log "  Warming up $host:$port..."
   docker compose exec -T memtier memtier_benchmark \
     -s "$host" -p "$port" \
-    --protocol=resp2 --requests=10000 --threads=2 --clients=10 \
+    --protocol=redis --requests=10000 --threads=2 --clients=10 \
     --ratio=1:1 --data-size=64 --hide-histogram > /dev/null 2>&1 || true
   flush_server "$host" "$port"
 done
@@ -84,13 +95,13 @@ for scenario in "${SCENARIOS[@]}"; do
   for i in "${!SERVERS[@]}"; do
     IFS=: read -r host port <<< "${SERVERS[$i]}"
     name="${SERVER_NAMES[$i]}"
-    out="/results/${name}/${scenario}.json"
+    local_out="$RESULTS_DIR/${name}/${scenario}.json"
     log "    -> $name"
 
     # Read scenario cfg and pass as args (strip comments/empty lines)
     cfg_args=$(grep -v '^\s*#' "scenarios/${scenario}.cfg" | grep -v '^\s*$' | tr '\n' ' ')
 
-    run_memtier "$host" "$port" "$cfg_args" "$out"
+    run_memtier "$host" "$port" "$cfg_args" "$local_out"
     flush_server "$host" "$port"
   done
 done
@@ -102,12 +113,12 @@ for pipeline in "${PIPELINES[@]}"; do
   for i in "${!SERVERS[@]}"; do
     IFS=: read -r host port <<< "${SERVERS[$i]}"
     name="${SERVER_NAMES[$i]}"
-    out="/results/${name}/pipeline_${pipeline}.json"
+    local_out="$RESULTS_DIR/${name}/pipeline_${pipeline}.json"
     log "    -> $name"
 
     run_memtier "$host" "$port" \
-      "--protocol=resp2 --threads=4 --clients=50 --requests=100000 --ratio=1:10 --data-size=256 --pipeline=$pipeline" \
-      "$out"
+      "--protocol=redis --threads=4 --clients=50 --requests=100000 --ratio=1:10 --data-size=256 --pipeline=$pipeline" \
+      "$local_out"
     flush_server "$host" "$port"
   done
 done
@@ -116,13 +127,13 @@ done
 log "=== Generating report ==="
 if command -v python3 &>/dev/null; then
   cd visualize
-  pip install -q -r requirements.txt
+  pip3 install -q -r requirements.txt
   python3 generate_report.py "../$RESULTS_DIR" "../$REPORTS_DIR"
   cd ..
   log "Report: $REPORTS_DIR/report.html"
 else
   log "python3 not found — skipping visualization. Run manually:"
-  log "  cd benchmark/visualize && pip install -r requirements.txt && python3 generate_report.py ../results/ ../reports/"
+  log "  cd benchmark/visualize && pip3 install -r requirements.txt && python3 generate_report.py ../results/ ../reports/"
 fi
 
 log "=== Done ==="

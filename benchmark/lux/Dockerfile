@@ -1,5 +1,5 @@
 # ─── Stage 1: Build Lux from source ──────────────────────────────────────────
-FROM rust:1.82-slim AS build
+FROM rustlang/rust:nightly-slim AS build
 
 # Install git and build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -22,8 +22,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     redis-tools \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=build /app/target/release/lux-server /usr/local/bin/lux-server
+COPY --from=build /app/target/release/lux /usr/local/bin/lux
 
 EXPOSE 6379
 
-ENTRYPOINT ["lux-server", "--port", "6379", "--bind", "0.0.0.0"]
+ENTRYPOINT ["lux", "--port", "6379", "--bind", "0.0.0.0"]
