@@ -1,5 +1,5 @@
 # ─── Stage 1: Build ───────────────────────────────────────────────────────────
-FROM ghcr.io/graalvm/jdk-community:26 AS builder
+FROM amazoncorretto:26-al2023 AS builder
 
 WORKDIR /workspace
 
@@ -9,6 +9,9 @@ COPY gradle/ gradle/
 COPY build.gradle.kts gradle.properties ./
 
 RUN chmod +x gradlew
+
+# Install tools required by gradlew (xargs is in findutils, which AL2023 omits by default)
+RUN dnf install -y findutils && dnf clean all
 
 # Pre-fetch dependencies; surface failures clearly instead of silently swallowing them
 RUN ./gradlew dependencies --no-daemon -q || echo "WARNING: dependency pre-fetch failed (will retry during build)"
@@ -21,11 +24,13 @@ COPY models/ models/
 RUN ./gradlew installDist --no-daemon -x test
 
 # ─── Stage 2: Runtime ─────────────────────────────────────────────────────────
-# Use the JRE-only variant to avoid shipping the full JDK (~1 GB) in the runtime image.
-# Java 26 is required for --enable-preview and jdk.incubator.vector; GraalVM CE 26
-# is currently the only widely-available Java 26 image. Switch to eclipse-temurin:26-jre
-# once it reaches Docker Hub stable.
-FROM ghcr.io/graalvm/jre-community:26 AS runtime
+# Use the headless variant (no AWT/Swing/sound) to keep the runtime image lean.
+# amazoncorretto:26-al2023-headless is publicly available on Docker Hub without auth.
+# Switch to eclipse-temurin:26-jre once it reaches Docker Hub stable.
+FROM amazoncorretto:26-al2023-headless AS runtime
+
+# Install findutils (provides xargs) required by the Gradle-generated start script
+RUN dnf install -y findutils && dnf clean all
 
 WORKDIR /app
 

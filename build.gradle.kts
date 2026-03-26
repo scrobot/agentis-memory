@@ -29,6 +29,7 @@ java {
 }
 
 application {
+    applicationName = "agentis-memory"
     mainClass = "io.agentis.memory.AgentisMemory"
     // Enable Java Vector API (SIMD) and Panama FFI
     applicationDefaultJvmArgs = listOf(

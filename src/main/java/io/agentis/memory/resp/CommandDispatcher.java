@@ -3,6 +3,8 @@ package io.agentis.memory.resp;
 import io.agentis.memory.command.CommandRouter;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Netty handler: receives decoded RespMessage, dispatches to CommandRouter,
@@ -10,10 +12,22 @@ import io.netty.channel.SimpleChannelInboundHandler;
  */
 public class CommandDispatcher extends SimpleChannelInboundHandler<RespMessage> {
 
+    private static final Logger log = LoggerFactory.getLogger(CommandDispatcher.class);
+
     private final CommandRouter router;
 
     public CommandDispatcher(CommandRouter router) {
         this.router = router;
+    }
+
+    @Override
+    public void channelActive(ChannelHandlerContext ctx) {
+        log.debug("Client connected: {}", ctx.channel().remoteAddress());
+    }
+
+    @Override
+    public void channelInactive(ChannelHandlerContext ctx) {
+        log.debug("Client disconnected: {}", ctx.channel().remoteAddress());
     }
 
     @Override
@@ -26,6 +40,7 @@ public class CommandDispatcher extends SimpleChannelInboundHandler<RespMessage> 
 
     @Override
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
+        log.warn("Channel error from {}: {}", ctx.channel().remoteAddress(), cause.getMessage());
         ctx.writeAndFlush(new RespMessage.Error("ERR " + cause.getMessage()));
     }
 }

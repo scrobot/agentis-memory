@@ -67,9 +67,11 @@ public class CommandRouter {
 
         CommandHandler handler = handlers.get(name);
         if (handler == null) {
+            log.warn("Unknown command '{}' from {}", name, ctx.channel().remoteAddress());
             return new RespMessage.Error("ERR unknown command '" + name + "'");
         }
 
+        log.debug("CMD {} from {}", name, ctx.channel().remoteAddress());
         return handler.handle(ctx, args);
     }
 
