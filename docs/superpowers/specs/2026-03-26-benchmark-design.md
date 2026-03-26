@@ -2,15 +2,15 @@
 
 ## Overview
 
-Бенчмарк-сьют для сравнения Agentis Memory с Redis и Dragonfly. Использует индустриальный стандарт `memtier_benchmark` для нагрузки и Python для визуализации.
+Бенчмарк-сьют для сравнения Agentis Memory с Redis, Dragonfly и Lux. Использует индустриальный стандарт `memtier_benchmark` для нагрузки и Python для визуализации.
 
-Три сервера, один и тот же набор тестов, красивые графики на выходе.
+Четыре сервера, один и тот же набор тестов, красивые графики на выходе.
 
 ## Принцип
 
 Никакого самописного бенчмарка. memtier_benchmark — то, чем Redis, Dragonfly, Garnet и все остальные себя меряют. Он многопоточный, поддерживает RESP, выдаёт JSON с HDR гистограммами. Мы просто:
 
-1. Поднимаем три сервера через Docker Compose
+1. Поднимаем четыре сервера через Docker Compose
 2. Прогоняем memtier_benchmark по каждому
 3. Собираем JSON результаты
 4. Генерим графики Python-скриптом
@@ -19,15 +19,16 @@
 
 | Server | Image | Port | Description |
 |---|---|---|---|
-| **Agentis Memory** | `agentis-memory:latest` (local build) | 6399 | Наш сервис |
-| **Redis** | `redis:7.4` | 6379 | Эталон, single-threaded |
-| **Dragonfly** | `docker.dragonflydb.io/dragonflydb/dragonfly:latest` | 6380 | Multi-threaded, claims 25x Redis |
+| **Agentis Memory** | `agentis-memory:latest` (local build) | 6399 | Наш сервис. Java 26 + GraalVM. |
+| **Redis** | `redis:7.4` | 6379 | Эталон. C, single-threaded. |
+| **Dragonfly** | `docker.dragonflydb.io/dragonflydb/dragonfly:latest` | 6380 | C++, multi-threaded, shared-nothing, io_uring. Claims 25x Redis. |
+| **Lux** | build from `github.com/lux-db/lux` | 6381 | Rust, multi-threaded, sharded. 200+ команд. MIT. Claims 3x Redis on SET. |
 
 ## Структура
 
 ```
 benchmark/
-├── docker-compose.yml          # поднимает 3 сервера + memtier
+├── docker-compose.yml          # поднимает 4 сервера + memtier
 ├── run.sh                      # оркестратор: запуск, сбор, визуализация
 ├── scenarios/                   # конфиги memtier для разных сценариев
 │   ├── strings.cfg
@@ -40,7 +41,8 @@ benchmark/
 ├── results/                     # JSON output от memtier (gitignored)
 │   ├── agentis/
 │   ├── redis/
-│   └── dragonfly/
+│   ├── dragonfly/
+│   └── lux/
 ├── visualize/
 │   ├── requirements.txt         # matplotlib, plotly, pandas, jinja2
 │   ├── generate_report.py       # парсит JSON, генерит графики
@@ -82,6 +84,20 @@ services:
       - "6380:6379"
     ulimits:
       memlock: -1
+
+  lux:
+    build:
+      context: ./lux
+      dockerfile: Dockerfile
+    ports:
+      - "6381:6379"
+    # Dockerfile for Lux:
+    # FROM rust:1.82 AS build
+    # RUN git clone https://github.com/lux-db/lux.git /app && cd /app && cargo build --release
+    # FROM debian:bookworm-slim
+    # COPY --from=build /app/target/release/lux-server /usr/local/bin/
+    # EXPOSE 6379
+    # ENTRYPOINT ["lux-server", "--port", "6379"]
 
   memtier:
     image: redislabs/memtier_benchmark:latest
@@ -223,7 +239,7 @@ done
 #!/bin/bash
 set -euo pipefail
 
-SERVERS=("agentis-memory:6399" "redis:6379" "dragonfly:6380")
+SERVERS=("agentis-memory:6399" "redis:6379" "dragonfly:6380" "lux:6381")
 SCENARIOS=(strings hashes lists sorted-sets sets mixed)
 PIPELINES=(1 10 50 100)
 
@@ -302,7 +318,7 @@ kaleido>=0.2    # для экспорта plotly в PNG
 1. **Throughput Bar Chart** (per scenario)
    - X: сценарий (strings, hashes, lists, ...)
    - Y: ops/sec
-   - 3 бара рядом: Agentis (синий), Redis (красный), Dragonfly (зелёный)
+   - 4 бара рядом: Agentis (синий), Redis (красный), Dragonfly (зелёный), Lux (оранжевый)
    - Подписи значений на барах
 
 2. **Latency Comparison** (per scenario)
@@ -312,11 +328,11 @@ kaleido>=0.2    # для экспорта plotly в PNG
 3. **Pipeline Scaling**
    - X: pipeline depth (1, 10, 50, 100)
    - Y: ops/sec
-   - 3 линии — как каждый сервер масштабируется с пайплайнингом
+   - 4 линии — как каждый сервер масштабируется с пайплайнингом
 
 4. **Latency Distribution (CDF)**
    - Per scenario: cumulative distribution function
-   - 3 кривые — какой сервер какой percentile держит
+   - 4 кривые — какой сервер какой percentile держит
 
 5. **Summary Heatmap**
    - Rows: сценарии
@@ -432,7 +448,7 @@ cd agentis-only && python recall_bench.py
 
 ## Критерий готовности
 
-1. `./run.sh` поднимает все 3 сервера, прогоняет все сценарии, генерит `reports/report.html`
+1. `./run.sh` поднимает все 4 сервера, прогоняет все сценарии, генерит `reports/report.html`
 2. HTML отчёт содержит все графики: throughput, latency, pipeline scaling, CDF, heatmap
 3. PNG экспорт для README
 4. Agentis-only скрипты выдают MEMSAVE/MEMQUERY latency и recall@K
