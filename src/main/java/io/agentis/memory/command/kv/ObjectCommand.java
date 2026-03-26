@@ -69,6 +69,7 @@ public class ObjectCommand implements CommandHandler {
             }
             case StoreValue.HashValue ignored -> "hashtable";
             case StoreValue.ListValue ignored -> "listpack";
+            case StoreValue.SortedSetValue ignored -> "skiplist";
         };
         return new RespMessage.BulkString(encoding.getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }

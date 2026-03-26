@@ -35,6 +35,7 @@ public class TypeCommand implements CommandHandler {
             case StoreValue.StringValue ignored -> "string";
             case StoreValue.HashValue ignored -> "hash";
             case StoreValue.ListValue ignored -> "list";
+            case StoreValue.SortedSetValue ignored -> "zset";
         };
         return new RespMessage.SimpleString(typeName);
     }
