@@ -33,10 +33,15 @@ public class CommandDispatcher extends SimpleChannelInboundHandler<RespMessage> 
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, RespMessage msg) {
         log.debug("Received message: {}", msg);
-        RespMessage response = router.dispatch(ctx, msg);
-        if (response != null) {
-            log.debug("Sending response: {}", response);
-            ctx.writeAndFlush(response);
+        try {
+            RespMessage response = router.dispatch(ctx, msg);
+            if (response != null) {
+                log.debug("Sending response: {}", response);
+                ctx.writeAndFlush(response);
+            }
+        } catch (Exception e) {
+            log.error("Error dispatching command", e);
+            ctx.writeAndFlush(new RespMessage.Error("ERR internal error: " + e.getMessage()));
         }
     }
 

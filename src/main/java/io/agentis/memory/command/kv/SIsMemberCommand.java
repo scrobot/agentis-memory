@@ -1,6 +1,7 @@
 package io.agentis.memory.command.kv;
 
 import io.agentis.memory.command.CommandHandler;
+import io.agentis.memory.command.server.HelloCommand;
 import io.agentis.memory.resp.RespMessage;
 import io.agentis.memory.store.KvStore;
 import io.agentis.memory.store.StoreValue;
@@ -31,8 +32,14 @@ public class SIsMemberCommand implements CommandHandler {
         String member = new String(args.get(2), StandardCharsets.UTF_8);
         try {
             StoreValue.SetValue sv = kvStore.getSet(key);
-            if (sv == null) return new RespMessage.RespInteger(0);
-            return new RespMessage.RespInteger(sv.members().contains(member) ? 1 : 0);
+            boolean exists = sv != null && sv.members().contains(member);
+
+            Integer version = ctx != null ? ctx.channel().attr(HelloCommand.PROTOCOL_VERSION).get() : 2;
+            if (version != null && version == 3) {
+                return new RespMessage.Boolean(exists);
+            }
+
+            return new RespMessage.RespInteger(exists ? 1 : 0);
         } catch (KvStore.WrongTypeException e) {
             return new RespMessage.Error(e.getMessage());
         }

@@ -1,6 +1,7 @@
 package io.agentis.memory.command.kv;
 
 import io.agentis.memory.command.CommandHandler;
+import io.agentis.memory.command.server.HelloCommand;
 import io.agentis.memory.resp.RespMessage;
 import io.agentis.memory.store.KvStore;
 import io.agentis.memory.store.StoreValue;
@@ -10,6 +11,7 @@ import jakarta.inject.Singleton;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.stream.Collectors;
 
 // SMEMBERS key
 @Singleton
@@ -31,8 +33,21 @@ public class SMembersCommand implements CommandHandler {
         try {
             StoreValue.SetValue sv = kvStore.getSet(key);
             if (sv == null) {
+                Integer version = ctx != null ? ctx.channel().attr(HelloCommand.PROTOCOL_VERSION).get() : 2;
+                if (version != null && version == 3) {
+                    return new RespMessage.RespSet(java.util.Set.of());
+                }
                 return new RespMessage.RespArray(List.of());
             }
+
+            Integer version = ctx != null ? ctx.channel().attr(HelloCommand.PROTOCOL_VERSION).get() : 2;
+            if (version != null && version == 3) {
+                java.util.Set<RespMessage> elements = sv.members().stream()
+                        .map(m -> (RespMessage) new RespMessage.BulkString(m.getBytes(StandardCharsets.UTF_8)))
+                        .collect(Collectors.toSet());
+                return new RespMessage.RespSet(elements);
+            }
+
             List<RespMessage> elements = sv.members().stream()
                     .map(m -> (RespMessage) new RespMessage.BulkString(m.getBytes(StandardCharsets.UTF_8)))
                     .toList();

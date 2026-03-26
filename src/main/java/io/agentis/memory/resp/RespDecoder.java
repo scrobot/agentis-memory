@@ -34,8 +34,83 @@ public class RespDecoder extends ByteToMessageDecoder {
             case ':' -> decodeInteger(in);
             case '$' -> decodeBulkString(in);
             case '*' -> decodeArray(in);
+            case '_' -> decodeNull(in);
+            case '#' -> decodeBoolean(in);
+            case ',' -> decodeDouble(in);
+            case '(' -> decodeBigNumber(in);
+            case '=' -> decodeVerbatimString(in);
+            case '%' -> decodeMap(in);
+            case '~' -> decodeSet(in);
             default -> throw new RuntimeException("Unknown RESP type: " + (char) prefix);
         };
+    }
+
+    private RespMessage decodeNull(ByteBuf in) {
+        if (in.readableBytes() < 2) return null;
+        in.skipBytes(2); // \r\n
+        return new RespMessage.Null();
+    }
+
+    private RespMessage decodeBoolean(ByteBuf in) {
+        if (in.readableBytes() < 3) return null;
+        byte b = in.readByte();
+        in.skipBytes(2); // \r\n
+        return b == 't' ? new RespMessage.Boolean(true) : new RespMessage.Boolean(false);
+    }
+
+    private RespMessage decodeDouble(ByteBuf in) {
+        String s = readLine(in);
+        if (s == null) return null;
+        return new RespMessage.Double(java.lang.Double.parseDouble(s));
+    }
+
+    private RespMessage decodeBigNumber(ByteBuf in) {
+        String s = readLine(in);
+        if (s == null) return null;
+        return new RespMessage.BigNumber(s);
+    }
+
+    private RespMessage decodeVerbatimString(ByteBuf in) {
+        String line = readLine(in);
+        if (line == null) return null;
+        int len = java.lang.Integer.parseInt(line);
+        if (in.readableBytes() < len + 2) return null;
+        byte[] formatBytes = new byte[3];
+        in.readBytes(formatBytes);
+        in.skipBytes(1); // :
+        byte[] contentBytes = new byte[len - 4];
+        in.readBytes(contentBytes);
+        in.skipBytes(2); // \r\n
+        return new RespMessage.VerbatimString(new String(formatBytes, java.nio.charset.StandardCharsets.UTF_8),
+                new String(contentBytes, java.nio.charset.StandardCharsets.UTF_8));
+    }
+
+    private RespMessage decodeMap(ByteBuf in) {
+        String line = readLine(in);
+        if (line == null) return null;
+        int count = java.lang.Integer.parseInt(line);
+        java.util.Map<RespMessage, RespMessage> elements = new java.util.LinkedHashMap<>(count);
+        for (int i = 0; i < count; i++) {
+            RespMessage key = decodeNext(in);
+            if (key == null) return null;
+            RespMessage value = decodeNext(in);
+            if (value == null) return null;
+            elements.put(key, value);
+        }
+        return new RespMessage.RespMap(elements);
+    }
+
+    private RespMessage decodeSet(ByteBuf in) {
+        String line = readLine(in);
+        if (line == null) return null;
+        int count = java.lang.Integer.parseInt(line);
+        java.util.Set<RespMessage> elements = new java.util.LinkedHashSet<>(count);
+        for (int i = 0; i < count; i++) {
+            RespMessage msg = decodeNext(in);
+            if (msg == null) return null;
+            elements.add(msg);
+        }
+        return new RespMessage.RespSet(elements);
     }
 
     private RespMessage decodeSimpleString(ByteBuf in) {

@@ -1,6 +1,7 @@
 package io.agentis.memory.command.kv;
 
 import io.agentis.memory.command.CommandHandler;
+import io.agentis.memory.command.server.HelloCommand;
 import io.agentis.memory.resp.RespMessage;
 import io.agentis.memory.store.KvStore;
 import io.netty.channel.ChannelHandlerContext;
@@ -28,6 +29,10 @@ public class GetCommand implements CommandHandler {
         String key = new String(args.get(1));
         byte[] value = kvStore.get(key);
         if (value == null) {
+            Integer version = ctx != null ? ctx.channel().attr(HelloCommand.PROTOCOL_VERSION).get() : 2;
+            if (version != null && version == 3) {
+                return new RespMessage.Null();
+            }
             return new RespMessage.NullBulkString();
         }
         return new RespMessage.BulkString(value);

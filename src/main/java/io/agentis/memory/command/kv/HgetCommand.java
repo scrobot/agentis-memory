@@ -1,6 +1,7 @@
 package io.agentis.memory.command.kv;
 
 import io.agentis.memory.command.CommandHandler;
+import io.agentis.memory.command.server.HelloCommand;
 import io.agentis.memory.resp.RespMessage;
 import io.agentis.memory.store.KvStore;
 import io.netty.channel.ChannelHandlerContext;
@@ -32,7 +33,14 @@ public class HgetCommand implements CommandHandler {
             return new RespMessage.Error(err);
         }
         byte[] bytes = (byte[]) result;
-        return bytes == null ? new RespMessage.NullBulkString() : new RespMessage.BulkString(bytes);
+        if (bytes == null) {
+            Integer version = ctx != null ? ctx.channel().attr(HelloCommand.PROTOCOL_VERSION).get() : 2;
+            if (version != null && version == 3) {
+                return new RespMessage.Null();
+            }
+            return new RespMessage.NullBulkString();
+        }
+        return new RespMessage.BulkString(bytes);
     }
 
     @Override

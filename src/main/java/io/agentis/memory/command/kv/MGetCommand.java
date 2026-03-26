@@ -1,6 +1,7 @@
 package io.agentis.memory.command.kv;
 
 import io.agentis.memory.command.CommandHandler;
+import io.agentis.memory.command.server.HelloCommand;
 import io.agentis.memory.resp.RespMessage;
 import io.agentis.memory.store.KvStore;
 import io.netty.channel.ChannelHandlerContext;
@@ -26,12 +27,17 @@ public class MGetCommand implements CommandHandler {
         if (args.size() < 2) {
             return new RespMessage.Error("ERR wrong number of arguments for 'MGET'");
         }
+        Integer version = ctx != null ? ctx.channel().attr(HelloCommand.PROTOCOL_VERSION).get() : 2;
         List<RespMessage> results = new ArrayList<>();
         for (int i = 1; i < args.size(); i++) {
             String key = new String(args.get(i));
             byte[] value = kvStore.get(key);
             if (value == null) {
-                results.add(new RespMessage.NullBulkString());
+                if (version != null && version == 3) {
+                    results.add(new RespMessage.Null());
+                } else {
+                    results.add(new RespMessage.NullBulkString());
+                }
             } else {
                 results.add(new RespMessage.BulkString(value));
             }

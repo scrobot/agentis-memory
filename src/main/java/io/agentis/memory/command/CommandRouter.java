@@ -52,6 +52,7 @@ public class CommandRouter {
                 .map(m -> switch (m) {
                     case RespMessage.BulkString b -> b.value();
                     case RespMessage.SimpleString s -> s.value().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                    case RespMessage.RespInteger i -> java.lang.Long.toString(i.value()).getBytes(java.nio.charset.StandardCharsets.UTF_8);
                     default -> null;
                 })
                 .toList();
@@ -123,5 +124,5 @@ public class CommandRouter {
     }
 
     // Commands that are always allowed even without AUTH
-    private static final Set<String> NO_AUTH_COMMANDS = Set.of("AUTH", "QUIT");
+    private static final Set<String> NO_AUTH_COMMANDS = Set.of("AUTH", "QUIT", "HELLO");
 }

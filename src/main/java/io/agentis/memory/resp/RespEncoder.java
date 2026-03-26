@@ -55,6 +55,49 @@ public class RespEncoder extends MessageToByteEncoder<RespMessage> {
                     }
                 }
             }
+            case RespMessage.Null _ -> {
+                out.writeBytes("_\r\n".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            }
+            case RespMessage.Boolean b -> {
+                out.writeBytes((b.value() ? "#t\r\n" : "#f\r\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            }
+            case RespMessage.Double d -> {
+                out.writeByte(',');
+                out.writeBytes(java.lang.Double.toString(d.value()).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                out.writeBytes(CRLF);
+            }
+            case RespMessage.BigNumber n -> {
+                out.writeByte('(');
+                out.writeBytes(n.value().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                out.writeBytes(CRLF);
+            }
+            case RespMessage.VerbatimString v -> {
+                out.writeByte('=');
+                int len = v.value().length() + 4; // format:3 + ':'
+                out.writeBytes(java.lang.Integer.toString(len).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                out.writeBytes(CRLF);
+                out.writeBytes(v.format().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                out.writeByte(':');
+                out.writeBytes(v.value().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                out.writeBytes(CRLF);
+            }
+            case RespMessage.RespMap m -> {
+                out.writeByte('%');
+                out.writeBytes(java.lang.Integer.toString(m.elements().size()).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                out.writeBytes(CRLF);
+                for (java.util.Map.Entry<RespMessage, RespMessage> entry : m.elements().entrySet()) {
+                    writeMessage(out, entry.getKey());
+                    writeMessage(out, entry.getValue());
+                }
+            }
+            case RespMessage.RespSet s -> {
+                out.writeByte('~');
+                out.writeBytes(java.lang.Integer.toString(s.elements().size()).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                out.writeBytes(CRLF);
+                for (RespMessage element : s.elements()) {
+                    writeMessage(out, element);
+                }
+            }
         }
     }
 }
