@@ -1,0 +1,16 @@
+{
+  "resources": {
+    "includes": [
+      {"pattern": "\\Qmodels/model.onnx\\E"},
+      {"pattern": "\\Qmodels/tokenizer.json\\E"},
+      {"pattern": "\\Qmodels/tokenizer_config.json\\E"},
+      {"pattern": "\\Qlogback.xml\\E"},
+      {"pattern": "\\QMETA-INF/services/.*\\E"},
+      {"pattern": "\\QMETA-INF/native-image/.*\\E"},
+      {"pattern": "ai/djl/.*"},
+      {"pattern": "ai/onnxruntime/.*"}
+    ]
+  },
+  "bundles": [
+  ]
+}

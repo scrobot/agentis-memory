@@ -4,9 +4,9 @@ build/
 gradle-app.setting
 !gradle-wrapper.jar
 
-# GraalVM native image output
-agentis-memory
-agentis-memory.exe
+# GraalVM native image output (root-level binary only)
+/agentis-memory
+/agentis-memory.exe
 
 # IDE
 .idea/
