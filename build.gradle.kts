@@ -53,6 +53,13 @@ dependencies {
     implementation("io.avaje:avaje-inject:$avajeInjectVersion")
     implementation("jakarta.inject:jakarta.inject-api:$jakartaInjectVersion")
 
+    // GraalVM SDK for native-image Feature class
+    // Version must match the GraalVM JDK installed (Java 26 → GraalVM 25.x)
+    compileOnly("org.graalvm.sdk:nativeimage:24.2.1") {
+        // Only needed at compile time; native-image provides this at build time
+        isTransitive = false
+    }
+
     // Annotation Processor
     annotationProcessor("io.avaje:avaje-inject-generator:$avajeInjectVersion")
 
@@ -129,10 +136,31 @@ graalvmNative {
                     "--enable-preview",
                     "--add-modules=jdk.incubator.vector",
                     "-H:+UnlockExperimentalVMOptions",
-                    // Include models/ directory as resources in the binary
+                    "--no-fallback",
+
+                    // ── Resources to bundle in the binary ──
                     "-H:IncludeResources=models/.*",
-                    "--initialize-at-build-time=io.netty",
-                    // Reduce binary size
+                    "-H:IncludeResources=logback.xml",
+
+                    // ── Netty: most classes need runtime init due to static native/unsafe access ──
+                    "--initialize-at-run-time=io.netty",
+
+                    // ── ONNX Runtime: JNI-heavy, must init at runtime ──
+                    "--initialize-at-run-time=ai.onnxruntime",
+
+                    // ── DJL Tokenizers: loads native lib at init ──
+                    "--initialize-at-run-time=ai.djl",
+
+                    // ── jvector: uses Panama Vector API, runtime init ──
+                    "--initialize-at-run-time=io.github.jbellis.jvector",
+
+                    // ── Logback: runtime init to avoid build-time logging context issues ──
+                    "--initialize-at-run-time=ch.qos.logback",
+
+                    // ── Allow incomplete classpath (some transitive deps may be absent) ──
+                    "--allow-incomplete-classpath",
+
+                    // ── Reduce binary size ──
                     "-O2"
                 )
             )
