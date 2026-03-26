@@ -47,4 +47,9 @@ public class MemDelCommand implements CommandHandler {
     public String name() {
         return "MEMDEL";
     }
+
+    @Override
+    public boolean isWriteCommand() {
+        return true;
+    }
 }

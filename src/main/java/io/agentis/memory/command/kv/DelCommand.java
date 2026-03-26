@@ -38,4 +38,9 @@ public class DelCommand implements CommandHandler {
     public String name() {
         return "DEL";
     }
+
+    @Override
+    public boolean isWriteCommand() {
+        return true;
+    }
 }

@@ -190,4 +190,9 @@ public class SetCommand implements CommandHandler {
     public List<String> aliases() {
         return List.of("SETEX");
     }
+
+    @Override
+    public boolean isWriteCommand() {
+        return true;
+    }
 }

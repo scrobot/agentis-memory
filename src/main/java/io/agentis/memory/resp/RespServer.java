@@ -54,12 +54,18 @@ public class RespServer {
                 .channel();
 
         log.info("Agentis Memory listening on {}:{}", config.bind, config.port);
-        serverChannel.closeFuture().sync();
+        // serverChannel.closeFuture().sync(); // Don't block here!
     }
 
     public void shutdown() {
         if (serverChannel != null) serverChannel.close();
         if (bossGroup != null) bossGroup.shutdownGracefully();
         if (workerGroup != null) workerGroup.shutdownGracefully();
+    }
+
+    public void waitForShutdown() throws InterruptedException {
+        if (serverChannel != null) {
+            serverChannel.closeFuture().sync();
+        }
     }
 }

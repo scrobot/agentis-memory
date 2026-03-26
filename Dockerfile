@@ -1,5 +1,5 @@
 # ─── Stage 1: Build ───────────────────────────────────────────────────────────
-FROM amazoncorretto:26-al2023 AS builder
+FROM docker.io/library/amazoncorretto:26-al2023 AS builder
 
 WORKDIR /workspace
 
@@ -23,7 +23,7 @@ COPY models/ models/
 # Use this arg to bust the cache during the build step.
 # It's better to do this before gradle build, but after source copy
 # so that any source change or external build arg change forces a re-run.
-ARG CACHE_BUST=1
+#ARG CACHE_BUST=1
 
 # Build the distribution (tests run against the container, not inside the build)
 RUN ./gradlew installDist --no-daemon -x test
@@ -32,7 +32,7 @@ RUN ./gradlew installDist --no-daemon -x test
 # Use the headless variant (no AWT/Swing/sound) to keep the runtime image lean.
 # amazoncorretto:26-al2023-headless is publicly available on Docker Hub without auth.
 # Switch to eclipse-temurin:26-jre once it reaches Docker Hub stable.
-FROM amazoncorretto:26-al2023-headless AS runtime
+FROM docker.io/library/amazoncorretto:26-al2023-headless AS runtime
 
 # Install findutils (provides xargs) required by the Gradle-generated start script
 RUN dnf install -y findutils && dnf clean all
@@ -55,4 +55,4 @@ EXPOSE 6399
 # intentional and required for Docker networking.
 # The generated start script injects applicationDefaultJvmArgs
 # (--enable-preview, --add-modules jdk.incubator.vector) automatically.
-ENTRYPOINT ["bin/agentis-memory", "--port", "6399", "--bind", "0.0.0.0", "--data-dir", "/data"]
+CMD ["bin/agentis-memory", "--port", "6399", "--bind", "0.0.0.0", "--data-dir", "/data"]

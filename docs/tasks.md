@@ -97,19 +97,19 @@ TYPE command must return correct type. SCAN/KEYS must iterate all types. DEL/EXI
 
 ---
 
-## 🔲 Step 5: AOF Persistence
+## ✅ Step 5: AOF Persistence
 
 **Depends on:** Step 4
 
-### 🔲 5a: AOF Writer
+### ✅ 5a: AOF Writer
 **Files:** `AofWriter.java`
 **Behavior:** Append write-commands in RESP format. fsync strategies (always/everysec/no).
 
-### 🔲 5b: AOF Reader + Recovery
+### ✅ 5b: AOF Reader + Recovery
 **Files:** `AofReader.java`, updates to `AgentisMemory.java`
 **Behavior:** Parse AOF, replay commands via CommandRouter (without writing back to AOF). MEMSAVE triggers re-indexation. Server shows `-LOADING` during recovery.
 
-### 🔲 5c: Integrate with CommandRouter
+### ✅ 5c: Integrate with CommandRouter
 **Behavior:** After successful write-command execution, append to AOF. `CommandHandler.isWriteCommand()` flag.
 
 **Test:** Write data → restart → data recovered. MEMSAVE → restart → MEMQUERY works.

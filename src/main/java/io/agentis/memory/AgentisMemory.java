@@ -2,6 +2,7 @@ package io.agentis.memory;
 
 import io.agentis.memory.config.ServerConfig;
 import io.agentis.memory.resp.RespServer;
+import io.agentis.memory.store.AofReader;
 import io.avaje.inject.BeanScope;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -9,12 +10,16 @@ import org.slf4j.LoggerFactory;
 public class AgentisMemory {
     private static final Logger log = LoggerFactory.getLogger(AgentisMemory.class);
 
-    public static void main(String[] args) {
+    static void main(String[] args) {
         ServerConfig config = ServerConfig.parse(args);
 
         try (BeanScope scope = BeanScope.builder()
                 .bean(ServerConfig.class, config)
                 .build()) {
+
+            // Recovery from AOF before starting the server
+            AofReader aofReader = scope.get(AofReader.class);
+            aofReader.recover();
 
             RespServer server = scope.get(RespServer.class);
 
@@ -25,6 +30,8 @@ public class AgentisMemory {
 
             try {
                 server.start();
+                log.info("Server started. Press Ctrl+C to stop.");
+                server.waitForShutdown();
             } catch (InterruptedException e) {
                 log.error("Server interrupted", e);
                 Thread.currentThread().interrupt();

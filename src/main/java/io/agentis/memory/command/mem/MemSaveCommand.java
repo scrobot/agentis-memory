@@ -61,4 +61,9 @@ public class MemSaveCommand implements CommandHandler {
     public String name() {
         return "MEMSAVE";
     }
+
+    @Override
+    public boolean isWriteCommand() {
+        return true;
+    }
 }

@@ -38,6 +38,10 @@ public class KvStore {
         store.put(key, new Entry(new StoreValue.StringValue(value), System.currentTimeMillis(), expireAt, hasVectorIndex));
     }
 
+    public void putEntry(String key, Entry entry) {
+        store.put(key, entry);
+    }
+
     /**
      * Conditional set with NX/XX semantics.
      *

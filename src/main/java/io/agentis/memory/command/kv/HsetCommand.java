@@ -48,4 +48,9 @@ public class HsetCommand implements CommandHandler {
     public List<String> aliases() {
         return List.of("HMSET");
     }
+
+    @Override
+    public boolean isWriteCommand() {
+        return true;
+    }
 }

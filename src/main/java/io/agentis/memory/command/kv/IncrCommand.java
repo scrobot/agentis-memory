@@ -153,4 +153,9 @@ public class IncrCommand implements CommandHandler {
     public List<String> aliases() {
         return List.of("DECR", "INCRBY", "DECRBY", "INCRBYFLOAT");
     }
+
+    @Override
+    public boolean isWriteCommand() {
+        return true;
+    }
 }

@@ -86,6 +86,11 @@ tasks.register<Test>("integrationTest") {
     useJUnitPlatform {
         includeTags("docker")
     }
+    testLogging {
+        events("passed", "failed", "skipped")
+        showStandardStreams = true
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+    }
     jvmArgs(
         "--enable-preview",
         "--add-modules", "jdk.incubator.vector"
@@ -100,6 +105,10 @@ tasks.register<Test>("integrationTest") {
     // The application under test is built inside the Docker image by the Dockerfile (installDist),
     // so local build output is NOT used by the container — only test bytecode is needed here.
     dependsOn(tasks.named("compileTestJava"))
+    val testTask = tasks.test.get()
+    testClassesDirs = testTask.testClassesDirs
+    classpath = testTask.classpath
+    // Run tests in the order they were provided, and only run the ones tagged with @Tag("docker")
 }
 
 tasks.compileJava {

@@ -3,6 +3,7 @@ package io.agentis.memory.command;
 import io.agentis.memory.command.kv.AuthCommand;
 import io.agentis.memory.config.ServerConfig;
 import io.agentis.memory.resp.RespMessage;
+import io.agentis.memory.store.AofWriter;
 import io.netty.channel.ChannelHandlerContext;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
@@ -23,10 +24,12 @@ public class CommandRouter {
 
     private final Map<String, CommandHandler> handlers = new HashMap<>();
     private final ServerConfig config;
+    private final AofWriter aofWriter;
 
     @Inject
-    public CommandRouter(ServerConfig config, List<CommandHandler> commandHandlers) {
+    public CommandRouter(ServerConfig config, AofWriter aofWriter, List<CommandHandler> commandHandlers) {
         this.config = config;
+        this.aofWriter = aofWriter;
 
         for (CommandHandler handler : commandHandlers) {
             handlers.put(handler.name().toUpperCase(), handler);
@@ -57,7 +60,7 @@ public class CommandRouter {
         String name = new String(args.getFirst()).toUpperCase();
 
         // Auth check: if requirepass is set, ensure client is authenticated
-        if (config.requirepass != null && !config.requirepass.isBlank()
+        if (ctx != null && config.requirepass != null && !config.requirepass.isBlank()
                 && !NO_AUTH_COMMANDS.contains(name)) {
             Boolean authenticated = ctx.channel().attr(AuthCommand.AUTHENTICATED).get();
             if (!Boolean.TRUE.equals(authenticated)) {
@@ -67,15 +70,30 @@ public class CommandRouter {
 
         CommandHandler handler = handlers.get(name);
         if (handler == null) {
-            log.warn("Unknown command '{}' from {}", name, ctx.channel().remoteAddress());
+            if (ctx != null) {
+                log.warn("Unknown command '{}' from {}", name, ctx.channel().remoteAddress());
+            } else {
+                log.warn("Unknown command '{}' during recovery", name);
+            }
             return new RespMessage.Error("ERR unknown command '" + name + "'");
         }
 
         RespMessage response = handler.handle(ctx, args);
         if (response instanceof RespMessage.Error err) {
-            log.warn("CMD {} from {} → ERROR: {}", name, ctx.channel().remoteAddress(), err.message());
+            if (ctx != null) {
+                log.warn("CMD {} from {} → ERROR: {}", name, ctx.channel().remoteAddress(), err.message());
+            } else {
+                log.warn("CMD {} during recovery → ERROR: {}", name, err.message());
+            }
         } else {
-            log.info("CMD {} from {} → {}", name, ctx.channel().remoteAddress(), describeResponse(response));
+            if (ctx != null) {
+                log.info("CMD {} from {} → {}", name, ctx.channel().remoteAddress(), describeResponse(response));
+                if (handler.isWriteCommand()) {
+                    aofWriter.append(args);
+                }
+            } else {
+                log.debug("REPLAY CMD {} → {}", name, describeResponse(response));
+            }
         }
         return response;
     }

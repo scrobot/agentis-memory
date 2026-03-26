@@ -38,4 +38,9 @@ public class MSetCommand implements CommandHandler {
     public String name() {
         return "MSET";
     }
+
+    @Override
+    public boolean isWriteCommand() {
+        return true;
+    }
 }

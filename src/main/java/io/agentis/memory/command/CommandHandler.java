@@ -20,4 +20,11 @@ public interface CommandHandler {
     default List<String> aliases() {
         return List.of();
     }
+
+    /**
+     * @return True if this command modifies the data and should be persisted to AOF.
+     */
+    default boolean isWriteCommand() {
+        return false;
+    }
 }

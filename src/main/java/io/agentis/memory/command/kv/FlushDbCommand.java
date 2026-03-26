@@ -31,4 +31,9 @@ public class FlushDbCommand implements CommandHandler {
     public String name() {
         return "FLUSHDB";
     }
+
+    @Override
+    public boolean isWriteCommand() {
+        return true;
+    }
 }
