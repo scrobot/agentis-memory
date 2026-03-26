@@ -1,349 +1,439 @@
-# Agentis Memory Benchmark Module — Design Spec
+# Agentis Memory Benchmark — Design Spec
 
 ## Overview
 
-Отдельный Gradle-модуль `benchmark/` для сравнения производительности Agentis Memory с Redis. Один и тот же набор тестов прогоняется на обоих серверах, результаты выводятся side-by-side.
+Бенчмарк-сьют для сравнения Agentis Memory с Redis и Dragonfly. Использует индустриальный стандарт `memtier_benchmark` для нагрузки и Python для визуализации.
+
+Три сервера, один и тот же набор тестов, красивые графики на выходе.
 
 ## Принцип
 
-Бенчмарк не должен знать к чему он подключён. Он подключается по RESP-протоколу к `host:port` и гоняет команды. Два прогона — один на Agentis Memory, один на Redis — одинаковые сценарии, одинаковые данные. Сравниваем.
+Никакого самописного бенчмарка. memtier_benchmark — то, чем Redis, Dragonfly, Garnet и все остальные себя меряют. Он многопоточный, поддерживает RESP, выдаёт JSON с HDR гистограммами. Мы просто:
 
-## Tech Stack
+1. Поднимаем три сервера через Docker Compose
+2. Прогоняем memtier_benchmark по каждому
+3. Собираем JSON результаты
+4. Генерим графики Python-скриптом
 
-- Java 26
-- JMH (Java Microbenchmark Harness) — для микробенчмарков
-- Jedis — Redis/RESP клиент
-- Testcontainers — поднять Redis в Docker автоматически
-- Gradle модуль: `benchmark/`
+## Targets
 
-## Архитектура
+| Server | Image | Port | Description |
+|---|---|---|---|
+| **Agentis Memory** | `agentis-memory:latest` (local build) | 6399 | Наш сервис |
+| **Redis** | `redis:7.4` | 6379 | Эталон, single-threaded |
+| **Dragonfly** | `docker.dragonflydb.io/dragonflydb/dragonfly:latest` | 6380 | Multi-threaded, claims 25x Redis |
+
+## Структура
 
 ```
 benchmark/
-├── build.gradle.kts
-├── src/main/java/io/agentis/memory/benchmark/
-│   ├── BenchmarkRunner.java          # main(), CLI, оркестрация
-│   ├── BenchmarkConfig.java          # конфиг: host, port, iterations, warmup
-│   ├── BenchmarkResult.java          # результаты: ops/sec, latency p50/p95/p99
-│   ├── BenchmarkReport.java          # форматирование side-by-side отчёта
-│   │
-│   ├── scenarios/                    # сценарии бенчмарков
-│   │   ├── BenchmarkScenario.java    # интерфейс: setup(), run(), teardown(), name()
-│   │   ├── StringsScenario.java      # SET/GET throughput
-│   │   ├── HashScenario.java         # HSET/HGET/HGETALL
-│   │   ├── ListScenario.java         # LPUSH/RPUSH/LRANGE
-│   │   ├── SortedSetScenario.java    # ZADD/ZRANGE/ZRANGEBYSCORE
-│   │   ├── SetScenario.java          # SADD/SMEMBERS/SINTER
-│   │   ├── MixedWorkloadScenario.java # реалистичный микс операций
-│   │   ├── PipelineScenario.java     # пайплайнинг N команд за раз
-│   │   └── MemoryCommandsScenario.java # MEMSAVE/MEMQUERY (только Agentis)
-│   │
-│   └── infra/                        # инфраструктура
-│       ├── ServerTarget.java         # enum: AGENTIS, REDIS
-│       ├── ServerManager.java        # запуск/остановка серверов (Testcontainers)
-│       └── LatencyRecorder.java      # HDR Histogram для записи latency
+├── docker-compose.yml          # поднимает 3 сервера + memtier
+├── run.sh                      # оркестратор: запуск, сбор, визуализация
+├── scenarios/                   # конфиги memtier для разных сценариев
+│   ├── strings.cfg
+│   ├── hashes.cfg
+│   ├── lists.cfg
+│   ├── sorted-sets.cfg
+│   ├── sets.cfg
+│   ├── mixed-workload.cfg
+│   └── pipeline.cfg
+├── results/                     # JSON output от memtier (gitignored)
+│   ├── agentis/
+│   ├── redis/
+│   └── dragonfly/
+├── visualize/
+│   ├── requirements.txt         # matplotlib, plotly, pandas, jinja2
+│   ├── generate_report.py       # парсит JSON, генерит графики
+│   ├── templates/
+│   │   └── report.html.j2       # Jinja2 шаблон HTML отчёта
+│   └── static/
+│       └── style.css
+├── reports/                     # сгенерированные отчёты (gitignored)
+│   ├── report.html              # интерактивный HTML с plotly графиками
+│   ├── throughput.png
+│   ├── latency_p99.png
+│   └── comparison.png
+├── agentis-only/                # тесты MEMSAVE/MEMQUERY (наш custom скрипт)
+│   ├── memsave_bench.py         # Python + redis-py, замеры MEMSAVE/MEMQUERY
+│   └── recall_bench.py          # recall@K measurement
+└── README.md                    # как запустить
 ```
 
-## Сценарии
+## Docker Compose
 
-### 1. StringsScenario — SET/GET throughput
+```yaml
+services:
+  agentis-memory:
+    build: ..
+    ports:
+      - "6399:6399"
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "6399", "ping"]
+      interval: 5s
 
-```
-Setup:  нет
-Run:    N итераций:
-        - SET random_key random_value (100 байт)
-        - GET random_key
-        - SET random_key random_value (1KB)
-        - GET random_key
-Metric: ops/sec для SET и GET отдельно, latency p50/p95/p99
-```
+  redis:
+    image: redis:7.4
+    ports:
+      - "6379:6379"
 
-### 2. HashScenario — HSET/HGET/HGETALL
+  dragonfly:
+    image: docker.dragonflydb.io/dragonflydb/dragonfly:latest
+    ports:
+      - "6380:6379"
+    ulimits:
+      memlock: -1
 
-```
-Setup:  создать 1000 хешей по 10 полей каждый
-Run:    N итераций:
-        - HSET random_hash random_field random_value
-        - HGET random_hash random_field
-        - HGETALL random_hash
-        - HDEL random_hash random_field
-Metric: ops/sec per command type, latency
-```
-
-### 3. ListScenario — LPUSH/RPUSH/LRANGE
-
-```
-Setup:  создать 100 списков по 100 элементов
-Run:    N итераций:
-        - LPUSH random_list random_value
-        - RPUSH random_list random_value
-        - LRANGE random_list 0 9 (первые 10)
-        - LPOP random_list
-Metric: ops/sec, latency
+  memtier:
+    image: redislabs/memtier_benchmark:latest
+    depends_on:
+      agentis-memory:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      dragonfly:
+        condition: service_started
+    entrypoint: ["sleep", "infinity"]  # kept alive, run.sh execs into it
 ```
 
-### 4. SortedSetScenario — ZADD/ZRANGE/ZRANGEBYSCORE
+## Сценарии memtier
 
-```
-Setup:  создать 100 sorted sets по 1000 членов, рандомные score 0-10000
-Run:    N итераций:
-        - ZADD random_zset random_score random_member
-        - ZRANGE random_zset 0 9 WITHSCORES
-        - ZRANGEBYSCORE random_zset min max LIMIT 0 10
-        - ZCARD random_zset
-        - ZSCORE random_zset random_member
-Metric: ops/sec, latency
-```
-
-### 5. SetScenario — SADD/SMEMBERS/SINTER
-
-```
-Setup:  создать 100 sets по 100 членов
-Run:    N итераций:
-        - SADD random_set random_member
-        - SISMEMBER random_set random_member
-        - SMEMBERS random_set (для маленьких)
-        - SINTER set1 set2
-Metric: ops/sec, latency
-```
-
-### 6. MixedWorkloadScenario — реалистичный микс
-
-Эмулирует реальную нагрузку агента:
-
-```
-Setup:  предзаполнить 10000 string ключей, 100 хешей, 50 списков
-Run:    N итераций, каждая случайно выбирает операцию по весам:
-        - 40% GET (string)
-        - 20% SET (string)
-        - 15% HGET/HSET
-        - 10% LPUSH/LRANGE
-        - 10% ZADD/ZRANGE
-        - 5%  DEL/EXISTS/TTL
-Metric: aggregate ops/sec, latency per operation type, overall p50/p95/p99
-```
-
-### 7. PipelineScenario — пайплайнинг
-
-```
-Setup:  нет
-Run:    Отправить N команд SET в одном pipeline (без ожидания ответа на каждую)
-        Batch sizes: 10, 50, 100, 500, 1000
-Metric: ops/sec при разных batch sizes, сравнение с non-pipelined
-```
-
-### 8. MemoryCommandsScenario — MEMSAVE/MEMQUERY (только Agentis)
-
-Не сравнивается с Redis (у Redis нет таких команд). Отдельная секция отчёта.
-
-```
-Setup:  подготовить 100 текстов разной длины (100, 500, 2000, 10000 символов)
-Run:
-        - MEMSAVE key short_text (100 chars) — замерить время ответа (sync) + время индексации (через MEMSTATUS polling)
-        - MEMSAVE key medium_text (2000 chars)
-        - MEMSAVE key long_text (10000 chars)
-        - MEMQUERY namespace "search query" 10 — после индексации 1000 записей
-        - MEMQUERY ALL "search query" 10 — cross-namespace
-Metric:
-        - MEMSAVE response latency (sync part)
-        - Indexation time (async, от OK до indexed)
-        - MEMQUERY latency vs corpus size (100, 500, 1000, 5000 записей)
-        - MEMQUERY recall — сравнить результаты с brute-force cosine search
-```
-
-## Параметры запуска
+### 1. Strings (SET/GET)
 
 ```bash
-# Полный бенчмарк — автоматически поднимает Redis через Testcontainers
-./gradlew :benchmark:run
-
-# Только конкретный сценарий
-./gradlew :benchmark:run --args="--scenario strings"
-
-# Против внешних серверов (без Testcontainers)
-./gradlew :benchmark:run --args="--agentis-host localhost --agentis-port 6399 --redis-host localhost --redis-port 6379"
-
-# Настройки
-./gradlew :benchmark:run --args="--warmup 1000 --iterations 100000 --threads 1"
-./gradlew :benchmark:run --args="--threads 4"  # multi-client concurrency
+memtier_benchmark \
+  -s $HOST -p $PORT \
+  --protocol=resp2 \
+  --threads=4 --clients=50 \
+  --requests=100000 \
+  --ratio=1:10 \
+  --data-size=256 \
+  --key-pattern=R:R \
+  --key-minimum=1 --key-maximum=1000000 \
+  --json-out-file=results/strings.json
 ```
 
-**CLI параметры:**
+### 2. Hashes
 
-| Параметр | Дефолт | Описание |
-|---|---|---|
-| `--agentis-host` | `localhost` | Agentis Memory host |
-| `--agentis-port` | `6399` | Agentis Memory port |
-| `--redis-host` | (auto) | Redis host. Если не задан, поднимается через Testcontainers |
-| `--redis-port` | (auto) | Redis port |
-| `--scenario` | `all` | Конкретный сценарий: `strings`, `hash`, `list`, `zset`, `set`, `mixed`, `pipeline`, `memory` |
-| `--warmup` | `5000` | Количество warmup итераций (не учитываются в метриках) |
-| `--iterations` | `100000` | Количество измеряемых итераций |
-| `--threads` | `1` | Количество клиентских потоков |
-| `--value-size` | `100` | Размер значений в байтах для string-тестов |
-| `--output` | `console` | Формат вывода: `console`, `json`, `csv` |
-
-## Формат отчёта
-
-### Console output (по умолчанию)
-
-```
-╔══════════════════════════════════════════════════════════════════════╗
-║                    Agentis Memory Benchmark v0.1                    ║
-║         Agentis Memory 0.1.0 vs Redis 7.4.2                        ║
-║         Threads: 1 | Iterations: 100,000 | Value size: 100B        ║
-╠══════════════════════════════════════════════════════════════════════╣
-║                                                                      ║
-║  STRINGS (SET/GET)                                                   ║
-║  ┌──────────┬───────────────┬───────────────┬───────────┐            ║
-║  │ Command  │ Agentis (ops) │ Redis (ops/s) │ Ratio     │            ║
-║  ├──────────┼───────────────┼───────────────┼───────────┤            ║
-║  │ SET      │    85,432     │   112,345     │  0.76x    │            ║
-║  │ GET      │    92,100     │   125,000     │  0.74x    │            ║
-║  └──────────┴───────────────┴───────────────┴───────────┘            ║
-║                                                                      ║
-║  Latency (ms)                                                        ║
-║  ┌──────────┬────────┬────────┬────────┬────────┬────────┬────────┐  ║
-║  │ Command  │  p50 A │  p50 R │  p95 A │  p95 R │  p99 A │  p99 R│  ║
-║  ├──────────┼────────┼────────┼────────┼────────┼────────┼────────┤  ║
-║  │ SET      │  0.011 │  0.008 │  0.025 │  0.018 │  0.052 │  0.035│  ║
-║  │ GET      │  0.010 │  0.007 │  0.022 │  0.015 │  0.048 │  0.030│  ║
-║  └──────────┴────────┴────────┴────────┴────────┴────────┴────────┘  ║
-║                                                                      ║
-║  HASHES (HSET/HGET/HGETALL)                                         ║
-║  ... (same format)                                                   ║
-║                                                                      ║
-║  AGENTIS-ONLY: MEMSAVE/MEMQUERY                                     ║
-║  ┌─────────────────────────────┬────────────────┐                    ║
-║  │ Operation                   │ Latency        │                    ║
-║  ├─────────────────────────────┼────────────────┤                    ║
-║  │ MEMSAVE (100 chars, sync)   │  0.015ms       │                    ║
-║  │ MEMSAVE (100 chars, index)  │  12ms          │                    ║
-║  │ MEMSAVE (10K chars, sync)   │  0.018ms       │                    ║
-║  │ MEMSAVE (10K chars, index)  │  185ms         │                    ║
-║  │ MEMQUERY (1K corpus, top-10)│  8ms           │                    ║
-║  │ MEMQUERY (5K corpus, top-10)│  15ms          │                    ║
-║  │ MEMQUERY recall@10          │  94.2%         │                    ║
-║  └─────────────────────────────┴────────────────┘                    ║
-║                                                                      ║
-║  SUMMARY                                                             ║
-║  Average throughput ratio: 0.75x (Agentis vs Redis)                  ║
-║  Average latency overhead: +35% p50, +40% p95                        ║
-║                                                                      ║
-╚══════════════════════════════════════════════════════════════════════╝
+```bash
+memtier_benchmark \
+  -s $HOST -p $PORT \
+  --protocol=resp2 \
+  --threads=4 --clients=50 \
+  --requests=100000 \
+  --command="HSET __key__ field1 __data__ field2 __data__" \
+  --command-ratio=1 \
+  --command="HGET __key__ field1" \
+  --command-ratio=5 \
+  --command="HGETALL __key__" \
+  --command-ratio=2 \
+  --data-size=128 \
+  --key-pattern=R:R \
+  --json-out-file=results/hashes.json
 ```
 
-### JSON output (`--output json`)
+### 3. Lists
 
-```json
-{
-  "metadata": {
-    "agentis_version": "0.1.0",
-    "redis_version": "7.4.2",
-    "threads": 1,
-    "iterations": 100000,
-    "value_size_bytes": 100,
-    "timestamp": "2026-03-26T16:00:00Z",
-    "os": "Linux 6.1",
-    "java_version": "26",
-    "cpu": "Apple M3 Pro",
-    "memory_gb": 36
-  },
-  "scenarios": {
-    "strings": {
-      "SET": {
-        "agentis": { "ops_per_sec": 85432, "p50_ms": 0.011, "p95_ms": 0.025, "p99_ms": 0.052 },
-        "redis":   { "ops_per_sec": 112345, "p50_ms": 0.008, "p95_ms": 0.018, "p99_ms": 0.035 },
-        "ratio": 0.76
-      },
-      "GET": { ... }
-    },
-    "memory_commands": {
-      "MEMSAVE_100_sync":  { "p50_ms": 0.015, "p95_ms": 0.022 },
-      "MEMSAVE_100_index": { "p50_ms": 12, "p95_ms": 18 },
-      "MEMQUERY_1k_top10": { "p50_ms": 8, "p95_ms": 14 },
-      "recall_at_10":      0.942
-    }
-  },
-  "summary": {
-    "avg_throughput_ratio": 0.75,
-    "avg_p50_overhead_pct": 35,
-    "avg_p95_overhead_pct": 40
-  }
-}
+```bash
+memtier_benchmark \
+  -s $HOST -p $PORT \
+  --protocol=resp2 \
+  --threads=4 --clients=50 \
+  --requests=100000 \
+  --command="LPUSH __key__ __data__" \
+  --command-ratio=3 \
+  --command="LRANGE __key__ 0 9" \
+  --command-ratio=5 \
+  --command="LPOP __key__" \
+  --command-ratio=2 \
+  --data-size=128 \
+  --json-out-file=results/lists.json
 ```
 
-## Latency Recording
+### 4. Sorted Sets
 
-Используем HdrHistogram (High Dynamic Range Histogram):
-- Точность: 3 significant digits
-- Диапазон: 1 microsecond — 10 seconds
-- Каждая операция записывается в наносекундах через `System.nanoTime()`
-- После прогона: extract p50, p95, p99, p999, max, mean
-
-Зависимость: `org.hdrhistogram:HdrHistogram:2.2.2`
-
-## Recall Measurement (для MEMQUERY)
-
-Для оценки качества векторного поиска:
-
-1. Загрузить N текстов через MEMSAVE, дождаться индексации
-2. Для каждого тестового запроса:
-   - Получить top-K через MEMQUERY
-   - Получить ground truth: embed запрос через Embedder, brute-force cosine similarity по всем чанкам, взять top-K
-   - Recall@K = |intersection(MEMQUERY_results, ground_truth)| / K
-3. Средний Recall@K по всем запросам
-
-## Инфраструктура запуска
-
-### Testcontainers
-
-```java
-// ServerManager.java
-GenericContainer<?> redis = new GenericContainer<>("redis:7.4")
-    .withExposedPorts(6379);
-redis.start();
-int redisPort = redis.getMappedPort(6379);
+```bash
+memtier_benchmark \
+  -s $HOST -p $PORT \
+  --protocol=resp2 \
+  --threads=4 --clients=50 \
+  --requests=100000 \
+  --command="ZADD __key__ __key_index__ __data__" \
+  --command-ratio=2 \
+  --command="ZRANGE __key__ 0 9 WITHSCORES" \
+  --command-ratio=5 \
+  --command="ZSCORE __key__ __data__" \
+  --command-ratio=3 \
+  --data-size=64 \
+  --json-out-file=results/sorted-sets.json
 ```
 
-Agentis Memory запускается отдельно (предполагается что уже запущен на `--agentis-port`). Или можно тоже в контейнере если есть Docker image.
+### 5. Sets
 
-### Warmup
+```bash
+memtier_benchmark \
+  -s $HOST -p $PORT \
+  --protocol=resp2 \
+  --threads=4 --clients=50 \
+  --requests=100000 \
+  --command="SADD __key__ __data__" \
+  --command-ratio=3 \
+  --command="SISMEMBER __key__ __data__" \
+  --command-ratio=5 \
+  --command="SMEMBERS __key__" \
+  --command-ratio=2 \
+  --data-size=64 \
+  --json-out-file=results/sets.json
+```
 
-Перед каждым сценарием — warmup фаза:
-- Прогнать `--warmup` итераций без записи метрик
-- Цель: прогреть JIT (для Agentis), TCP connection pool, OS page cache
+### 6. Mixed Workload
 
-### Cleanup
+```bash
+memtier_benchmark \
+  -s $HOST -p $PORT \
+  --protocol=resp2 \
+  --threads=4 --clients=50 \
+  --requests=200000 \
+  --ratio=1:4 \
+  --data-size=256 \
+  --key-pattern=G:G \
+  --key-minimum=1 --key-maximum=100000 \
+  --json-out-file=results/mixed.json
+```
 
-После каждого сценария — `FLUSHDB` на обоих серверах.
+### 7. Pipeline
 
-## Gradle модуль
+Прогон strings сценария с разными pipeline depth:
 
-```kotlin
-// benchmark/build.gradle.kts
-plugins {
-    java
-    application
-}
+```bash
+for PIPELINE in 1 10 50 100; do
+  memtier_benchmark \
+    -s $HOST -p $PORT \
+    --protocol=resp2 \
+    --threads=4 --clients=50 \
+    --requests=100000 \
+    --ratio=1:10 --data-size=256 \
+    --pipeline=$PIPELINE \
+    --json-out-file=results/pipeline_${PIPELINE}.json
+done
+```
 
-application {
-    mainClass.set("io.agentis.memory.benchmark.BenchmarkRunner")
-}
+## run.sh — Оркестратор
 
-dependencies {
-    implementation("redis.clients:jedis:5.2.0")
-    implementation("org.hdrhistogram:HdrHistogram:2.2.2")
-    implementation("org.testcontainers:testcontainers:1.20.4")
+```bash
+#!/bin/bash
+set -euo pipefail
 
-    // Для recall measurement — нужен Embedder из основного модуля
-    implementation(project(":"))
-}
+SERVERS=("agentis-memory:6399" "redis:6379" "dragonfly:6380")
+SCENARIOS=(strings hashes lists sorted-sets sets mixed)
+PIPELINES=(1 10 50 100)
+
+echo "=== Agentis Memory Benchmark Suite ==="
+echo "Targets: ${SERVERS[*]}"
+
+# Warmup
+for server in "${SERVERS[@]}"; do
+  IFS=: read host port <<< "$server"
+  echo "Warming up $host:$port..."
+  docker compose exec memtier memtier_benchmark \
+    -s $host -p $port --requests=10000 --threads=2 --clients=10 \
+    --ratio=1:1 --data-size=64 --hide-histogram > /dev/null 2>&1
+  # Flush after warmup
+  docker compose exec memtier redis-cli -h $host -p $port FLUSHALL
+done
+
+# Run scenarios
+for scenario in "${SCENARIOS[@]}"; do
+  for server in "${SERVERS[@]}"; do
+    IFS=: read host port <<< "$server"
+    name=$(echo $host | tr '-' '_')
+    echo "Running $scenario on $host:$port..."
+
+    docker compose exec memtier memtier_benchmark \
+      -s $host -p $port \
+      $(cat scenarios/${scenario}.cfg) \
+      --json-out-file=/results/${name}/${scenario}.json
+
+    # Cleanup
+    docker compose exec memtier redis-cli -h $host -p $port FLUSHALL
+  done
+done
+
+# Pipeline benchmarks
+for pipeline in "${PIPELINES[@]}"; do
+  for server in "${SERVERS[@]}"; do
+    IFS=: read host port <<< "$server"
+    name=$(echo $host | tr '-' '_')
+    echo "Running pipeline=$pipeline on $host:$port..."
+
+    docker compose exec memtier memtier_benchmark \
+      -s $host -p $port \
+      --protocol=resp2 --threads=4 --clients=50 --requests=100000 \
+      --ratio=1:10 --data-size=256 --pipeline=$pipeline \
+      --json-out-file=/results/${name}/pipeline_${pipeline}.json
+
+    docker compose exec memtier redis-cli -h $host -p $port FLUSHALL
+  done
+done
+
+echo "=== Generating report ==="
+cd visualize && python generate_report.py ../results/ ../reports/
+
+echo "Report: reports/report.html"
+```
+
+## Визуализация (Python)
+
+### requirements.txt
+
+```
+matplotlib>=3.9
+plotly>=5.24
+pandas>=2.2
+jinja2>=3.1
+kaleido>=0.2    # для экспорта plotly в PNG
+```
+
+### generate_report.py — что генерит
+
+**Входные данные:** директория `results/` с JSON файлами от memtier по каждому серверу и сценарию.
+
+**Графики:**
+
+1. **Throughput Bar Chart** (per scenario)
+   - X: сценарий (strings, hashes, lists, ...)
+   - Y: ops/sec
+   - 3 бара рядом: Agentis (синий), Redis (красный), Dragonfly (зелёный)
+   - Подписи значений на барах
+
+2. **Latency Comparison** (per scenario)
+   - Grouped bar chart: p50, p95, p99 для каждого сервера
+   - Или line chart: percentile на X, latency(ms) на Y, 3 линии
+
+3. **Pipeline Scaling**
+   - X: pipeline depth (1, 10, 50, 100)
+   - Y: ops/sec
+   - 3 линии — как каждый сервер масштабируется с пайплайнингом
+
+4. **Latency Distribution (CDF)**
+   - Per scenario: cumulative distribution function
+   - 3 кривые — какой сервер какой percentile держит
+
+5. **Summary Heatmap**
+   - Rows: сценарии
+   - Columns: серверы
+   - Цвет: ratio vs Redis (>1 = быстрее, <1 = медленнее)
+   - Число внутри ячейки: "0.76x" или "1.2x"
+
+6. **Agentis-Only Section** (MEMSAVE/MEMQUERY)
+   - MEMSAVE latency vs text size (bar chart)
+   - MEMQUERY latency vs corpus size (line chart)
+   - Recall@K (bar chart)
+
+**Формат вывода:**
+- `report.html` — интерактивный HTML с plotly графиками (hover, zoom)
+- `reports/*.png` — статические PNG для README / презентаций
+- Console summary — таблица с ключевыми цифрами
+
+### HTML отчёт (Jinja2 шаблон)
+
+Красивый standalone HTML:
+- Metadata: дата, версии серверов, hardware, параметры теста
+- Секция на каждый сценарий с графиком + таблицей цифр
+- Summary heatmap вверху
+- Agentis-only секция внизу
+- Тёмная тема, responsive
+
+## Agentis-Only Benchmarks
+
+memtier не знает про MEMSAVE/MEMQUERY. Для них — отдельные Python-скрипты.
+
+### memsave_bench.py
+
+```python
+import redis
+import time
+import statistics
+
+r = redis.Redis(host='localhost', port=6399)
+
+# MEMSAVE latency (sync part)
+for text_size in [100, 500, 2000, 10000]:
+    text = "word " * (text_size // 5)
+    latencies = []
+    for i in range(1000):
+        key = f"bench:{i}"
+        start = time.perf_counter_ns()
+        r.execute_command("MEMSAVE", key, text)
+        end = time.perf_counter_ns()
+        latencies.append((end - start) / 1e6)  # ms
+
+    print(f"MEMSAVE {text_size} chars: "
+          f"p50={statistics.median(latencies):.3f}ms "
+          f"p95={sorted(latencies)[int(0.95*len(latencies))]:.3f}ms "
+          f"p99={sorted(latencies)[int(0.99*len(latencies))]:.3f}ms")
+
+# Indexation time (poll MEMSTATUS)
+for text_size in [100, 2000, 10000]:
+    text = "word " * (text_size // 5)
+    key = f"indexbench:{text_size}"
+    r.execute_command("MEMSAVE", key, text)
+    start = time.perf_counter_ns()
+    while True:
+        status = r.execute_command("MEMSTATUS", key)
+        if status[0] == b"indexed":
+            break
+        time.sleep(0.001)
+    elapsed = (time.perf_counter_ns() - start) / 1e6
+    print(f"Indexation {text_size} chars: {elapsed:.1f}ms")
+
+# MEMQUERY latency vs corpus size
+for corpus_size in [100, 500, 1000, 5000]:
+    # populate (assume already indexed from above or separate setup)
+    latencies = []
+    for _ in range(100):
+        start = time.perf_counter_ns()
+        r.execute_command("MEMQUERY", "bench", "search query about something", "10")
+        end = time.perf_counter_ns()
+        latencies.append((end - start) / 1e6)
+
+    print(f"MEMQUERY (corpus={corpus_size}, top-10): "
+          f"p50={statistics.median(latencies):.3f}ms "
+          f"p99={sorted(latencies)[int(0.99*len(latencies))]:.3f}ms")
+```
+
+### recall_bench.py
+
+```python
+# Populate N texts via MEMSAVE, wait for indexation
+# For each test query:
+#   1. MEMQUERY → get top-K results
+#   2. Embed query via ONNX locally, brute-force cosine against all chunks
+#   3. Recall@K = |intersection| / K
+# Average recall across all queries
+```
+
+Зависимости: `redis-py`, `onnxruntime`, `numpy`, `sentence-transformers` (для ground truth).
+
+## Запуск
+
+```bash
+cd benchmark
+
+# Полный прогон
+./run.sh
+
+# Только визуализация (из уже собранных results/)
+cd visualize && python generate_report.py ../results/ ../reports/
+
+# Только Agentis-specific
+cd agentis-only && python memsave_bench.py
+cd agentis-only && python recall_bench.py
 ```
 
 ## Критерий готовности
 
-1. `./gradlew :benchmark:run` автоматически поднимает Redis, прогоняет все сценарии, выводит side-by-side отчёт
-2. JSON output содержит все метрики, воспроизводим
-3. MEMQUERY recall@10 >= 90%
-4. Никаких ошибок или unknown commands при прогоне (все используемые команды реализованы)
+1. `./run.sh` поднимает все 3 сервера, прогоняет все сценарии, генерит `reports/report.html`
+2. HTML отчёт содержит все графики: throughput, latency, pipeline scaling, CDF, heatmap
+3. PNG экспорт для README
+4. Agentis-only скрипты выдают MEMSAVE/MEMQUERY latency и recall@K
+5. Никаких ошибок при прогоне (все команды поддержаны)
