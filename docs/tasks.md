@@ -157,6 +157,31 @@ TYPE command must return correct type. SCAN/KEYS must iterate all types. DEL/EXI
 
 ---
 
+## 🔲 Step 8: Benchmark Module
+
+**Depends on:** Steps 2 (all commands) + Step 4 (MEMSAVE/MEMQUERY)
+**Spec:** [docs/superpowers/specs/2026-03-26-benchmark-design.md](superpowers/specs/2026-03-26-benchmark-design.md)
+
+### 🔲 8a: Benchmark infrastructure
+**Files:** `benchmark/build.gradle.kts`, `BenchmarkRunner.java`, `BenchmarkConfig.java`, `BenchmarkResult.java`, `BenchmarkReport.java`, `LatencyRecorder.java`, `ServerManager.java`
+**Task:** Gradle submodule, CLI args parsing, Testcontainers Redis setup, HdrHistogram latency recording, side-by-side console + JSON report formatting.
+
+### 🔲 8b: Standard command scenarios
+**Files:** `StringsScenario.java`, `HashScenario.java`, `ListScenario.java`, `SortedSetScenario.java`, `SetScenario.java`
+**Task:** Benchmarks for each data type against both Agentis Memory and Redis.
+
+### 🔲 8c: Mixed workload + Pipeline scenarios
+**Files:** `MixedWorkloadScenario.java`, `PipelineScenario.java`
+**Task:** Realistic mixed workload (40% GET, 20% SET, etc.) and pipeline batching benchmarks.
+
+### 🔲 8d: Memory commands scenario (Agentis-only)
+**Files:** `MemoryCommandsScenario.java`
+**Task:** MEMSAVE latency (sync + indexation time), MEMQUERY latency vs corpus size, recall@10 measurement.
+
+**Test:** `./gradlew :benchmark:run` completes without errors, produces side-by-side report.
+
+---
+
 ## Dependency Graph
 
 ```
@@ -175,10 +200,10 @@ Step 2a (refactor multi-type store)
 Step 3a Chunker ──┐
 Step 3b HNSW ─────┤
                   ▼
-            Step 4 (MEMSAVE/MEMQUERY)
-                  │
-                  ▼
-            Step 5 (AOF)
+            Step 4 (MEMSAVE/MEMQUERY) ──┐
+                  │                     │
+                  ▼                     ▼
+            Step 5 (AOF)          Step 8 (Benchmark)
                   │
                   ▼
             Step 6 (Snapshots + Shutdown)
@@ -189,3 +214,4 @@ Step 3b HNSW ─────┤
 
 Steps 2 and 3 can run fully in parallel.
 Within Step 2, tasks 2b-2i can run in parallel after 2a.
+Step 8 (Benchmark) can run in parallel with Steps 5-7 (persistence).
