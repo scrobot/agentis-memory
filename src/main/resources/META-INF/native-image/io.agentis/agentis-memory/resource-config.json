@@ -8,7 +8,9 @@
       {"pattern": "\\QMETA-INF/services/.*\\E"},
       {"pattern": "\\QMETA-INF/native-image/.*\\E"},
       {"pattern": "ai/djl/.*"},
-      {"pattern": "ai/onnxruntime/.*"}
+      {"pattern": "ai/onnxruntime/.*"},
+      {"pattern": "native/lib/.*"},
+      {"pattern": "com/microsoft/onnxruntime/native/.*"}
     ]
   },
   "bundles": [
