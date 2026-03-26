@@ -48,7 +48,7 @@ TYPE command must return correct type. SCAN/KEYS must iterate all types. DEL/EXI
 **Spec:** [docs/commands/keys-basic.md](commands/keys-basic.md) — RENAME, RENAMENX, PERSIST, PEXPIRE, PTTL, RANDOMKEY, UNLINK, OBJECT
 **Test:** Unit test per command. RENAME across types. PERSIST removes TTL.
 
-### 🔲 2h: Extended Server commands 🔀 (after 2a)
+### ✅ 2h: Extended Server commands 🔀 (after 2a)
 **Spec:** [docs/commands/server.md](commands/server.md) — SELECT, FLUSHDB, FLUSHALL, ECHO, TIME
 **Test:** FLUSHDB clears all data. TIME returns valid timestamp. SELECT 0 → OK.
 
