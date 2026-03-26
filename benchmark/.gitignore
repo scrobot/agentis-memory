@@ -1,0 +1,13 @@
+# Generated results — not committed
+results/
+reports/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# macOS
+.DS_Store

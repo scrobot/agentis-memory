@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Agentis Memory Benchmark Report</title>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <link rel="stylesheet" href="../visualize/static/style.css" />
+  <style>
+    /* Inline critical styles so the report is self-contained */
+    :root {
+      --bg: #0d1117; --bg2: #161b22; --bg3: #21262d;
+      --border: #30363d; --text: #e6edf3; --text-muted: #8b949e;
+      --accent: #4C72B0; --red: #DD4444; --green: #2E8B57; --orange: #FF8C00;
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; font-size: 14px; line-height: 1.6; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    .page { max-width: 1280px; margin: 0 auto; padding: 32px 24px; }
+
+    header { border-bottom: 1px solid var(--border); margin-bottom: 40px; padding-bottom: 24px; }
+    header h1 { font-size: 28px; margin: 0 0 8px; }
+    header .meta { color: var(--text-muted); font-size: 13px; }
+
+    h2 { font-size: 20px; margin: 48px 0 16px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+    h3 { font-size: 16px; margin: 32px 0 12px; color: var(--text-muted); }
+
+    .chart-wrap { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 24px; overflow: hidden; }
+
+    /* Summary table */
+    .summary-table { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
+    .summary-table th, .summary-table td { padding: 8px 12px; border: 1px solid var(--border); text-align: right; font-size: 13px; }
+    .summary-table th { background: var(--bg3); color: var(--text-muted); font-weight: 600; }
+    .summary-table td:first-child { text-align: left; font-weight: 500; }
+    .ratio-fast { color: #4caf50; }
+    .ratio-slow { color: #f44336; }
+    .ratio-neutral { color: var(--text-muted); }
+
+    /* Legend pills */
+    .legend { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 24px; }
+    .legend-item { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+    .legend-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+
+    .toc { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 16px 24px; margin-bottom: 40px; }
+    .toc ul { margin: 8px 0 0; padding-left: 20px; }
+    .toc li { margin: 4px 0; }
+
+    /* Two-column grid for CDF/percentile charts */
+    .chart-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 900px) { .chart-grid-2 { grid-template-columns: 1fr; } }
+
+    footer { margin-top: 64px; padding-top: 24px; border-top: 1px solid var(--border); color: var(--text-muted); font-size: 12px; text-align: center; }
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <header>
+    <h1>Agentis Memory — Benchmark Report</h1>
+    <div class="meta">
+      Generated: {{ generated_at }} &nbsp;·&nbsp;
+      Targets: Agentis Memory, Redis 7.4, Dragonfly, Lux &nbsp;·&nbsp;
+      Tool: memtier_benchmark
+    </div>
+  </header>
+
+  <nav class="toc">
+    <strong>Contents</strong>
+    <ul>
+      <li><a href="#heatmap">Summary Heatmap</a></li>
+      <li><a href="#throughput">Throughput by Scenario</a></li>
+      <li><a href="#latency">Latency by Scenario</a></li>
+      <li><a href="#pipeline">Pipeline Scaling</a></li>
+      <li><a href="#per-scenario">Per-Scenario Detail</a></li>
+      <li><a href="#numbers">Raw Numbers</a></li>
+    </ul>
+  </nav>
+
+  <div class="legend">
+    <span class="legend-item"><span class="legend-dot" style="background:#4C72B0"></span>Agentis Memory</span>
+    <span class="legend-item"><span class="legend-dot" style="background:#DD4444"></span>Redis 7.4</span>
+    <span class="legend-item"><span class="legend-dot" style="background:#2E8B57"></span>Dragonfly</span>
+    <span class="legend-item"><span class="legend-dot" style="background:#FF8C00"></span>Lux</span>
+  </div>
+
+  <!-- ── Heatmap ── -->
+  <h2 id="heatmap">Summary Heatmap</h2>
+  <p style="color:var(--text-muted);font-size:13px">Throughput ratio vs Redis. Values &gt; 1.0x = faster, &lt; 1.0x = slower.</p>
+  <div class="chart-wrap">{{ charts.heatmap }}</div>
+
+  <!-- ── Throughput ── -->
+  <h2 id="throughput">Throughput (ops/sec)</h2>
+  <div class="chart-wrap">{{ charts.throughput }}</div>
+
+  <!-- ── Latency ── -->
+  <h2 id="latency">Latency</h2>
+  <h3>p99</h3>
+  <div class="chart-wrap">{{ charts.latency_p99 }}</div>
+  <h3>p95</h3>
+  <div class="chart-wrap">{{ charts.latency_p95 }}</div>
+
+  <!-- ── Pipeline ── -->
+  <h2 id="pipeline">Pipeline Scaling</h2>
+  <p style="color:var(--text-muted);font-size:13px">SET/GET ratio 1:10, data-size 256B, 4 threads × 50 clients.</p>
+  <div class="chart-wrap">{{ charts.pipeline }}</div>
+
+  <!-- ── Per-scenario ── -->
+  <h2 id="per-scenario">Per-Scenario Detail</h2>
+  {% for scenario in scenarios %}
+  <h3>{{ scenario_labels[scenario] }}</h3>
+  <div class="chart-grid-2">
+    <div class="chart-wrap">{{ charts.percentile_profile[scenario] }}</div>
+    <div class="chart-wrap">{{ charts.cdf[scenario] }}</div>
+  </div>
+  {% endfor %}
+
+  <!-- ── Raw numbers ── -->
+  <h2 id="numbers">Raw Numbers</h2>
+  {% for row in summary_rows %}
+  <h3>{{ row.scenario }}</h3>
+  <table class="summary-table">
+    <thead>
+      <tr>
+        <th>Server</th>
+        <th>ops/sec</th>
+        <th>p50 (ms)</th>
+        <th>p99 (ms)</th>
+        <th>vs Redis</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for label, stats in row.servers.items() %}
+      <tr>
+        <td>{{ label }}</td>
+        <td>{{ stats.ops_sec }}</td>
+        <td>{{ stats.p50 }}</td>
+        <td>{{ stats.p99 }}</td>
+        <td class="{% if stats.ratio_val > 1.05 %}ratio-fast{% elif stats.ratio_val > 0 and stats.ratio_val < 0.95 %}ratio-slow{% else %}ratio-neutral{% endif %}">
+          {{ stats.ratio }}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endfor %}
+
+  <footer>
+    Agentis Memory Benchmark Suite &nbsp;·&nbsp; {{ generated_at }}
+  </footer>
+
+</div>
+</body>
+</html>

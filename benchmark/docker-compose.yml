@@ -1,0 +1,86 @@
+services:
+  agentis-memory:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: agentis-memory:latest
+    container_name: bench-agentis
+    ports:
+      - "6399:6399"
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/6399 && printf '*1\\r\\n$4\\r\\nPING\\r\\n' >&3 && read -t 2 line <&3 && [[ \"$$line\" == *PONG* ]]"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 60s
+    networks:
+      - bench-net
+
+  redis:
+    image: redis:7.4
+    container_name: bench-redis
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - bench-net
+
+  dragonfly:
+    image: docker.dragonflydb.io/dragonflydb/dragonfly:latest
+    container_name: bench-dragonfly
+    ports:
+      - "6380:6379"
+    ulimits:
+      memlock: -1
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "6379", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - bench-net
+
+  lux:
+    build:
+      context: ./lux
+      dockerfile: Dockerfile
+    image: lux:bench
+    container_name: bench-lux
+    ports:
+      - "6381:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "6379", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 120s
+    networks:
+      - bench-net
+
+  memtier:
+    image: redislabs/memtier_benchmark:latest
+    container_name: bench-memtier
+    depends_on:
+      agentis-memory:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      dragonfly:
+        condition: service_healthy
+      lux:
+        condition: service_healthy
+    entrypoint: ["sleep", "infinity"]
+    volumes:
+      - ./results:/results
+      - ./scenarios:/scenarios
+    networks:
+      - bench-net
+
+networks:
+  bench-net:
+    driver: bridge

@@ -1,0 +1,6 @@
+redis>=5.0
+onnxruntime>=1.19
+numpy>=1.26
+tokenizers>=0.19
+# Optional: for ground-truth cross-validation
+# sentence-transformers>=3.0
