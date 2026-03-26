@@ -33,6 +33,7 @@ public class TypeCommand implements CommandHandler {
         }
         String typeName = switch (entry.value()) {
             case StoreValue.StringValue ignored -> "string";
+            case StoreValue.SetValue ignored -> "set";
         };
         return new RespMessage.SimpleString(typeName);
     }

@@ -71,6 +71,53 @@ public class KvStore {
         return true;
     }
 
+    /**
+     * Returns the SetValue for a key, or null if the key does not exist.
+     * Throws WrongTypeException if the key holds a non-set value.
+     * Creates an empty set entry if the key is absent and create=true.
+     */
+    public StoreValue.SetValue getSet(String key) {
+        Entry e = getEntry(key);
+        if (e == null) return null;
+        if (e.value() instanceof StoreValue.SetValue sv) return sv;
+        throw new WrongTypeException();
+    }
+
+    /**
+     * Returns the SetValue for a key, creating an empty set if the key does not exist.
+     * Throws WrongTypeException if the key holds a non-set value.
+     */
+    public StoreValue.SetValue getOrCreateSet(String key) {
+        Entry e = store.get(key);
+        if (e != null && e.isExpired()) {
+            store.remove(key);
+            e = null;
+        }
+        if (e == null) {
+            StoreValue.SetValue sv = new StoreValue.SetValue();
+            store.put(key, new Entry(sv, System.currentTimeMillis(), -1, false));
+            return sv;
+        }
+        if (e.value() instanceof StoreValue.SetValue sv) return sv;
+        throw new WrongTypeException();
+    }
+
+    /**
+     * Removes the key if the set is empty.
+     */
+    public void removeIfEmptySet(String key) {
+        store.computeIfPresent(key, (k, e) -> {
+            if (e.value() instanceof StoreValue.SetValue sv && sv.members().isEmpty()) return null;
+            return e;
+        });
+    }
+
+    public static class WrongTypeException extends RuntimeException {
+        public WrongTypeException() {
+            super("WRONGTYPE Operation against a key holding the wrong kind of value");
+        }
+    }
+
     public int size() {
         return store.size();
     }
