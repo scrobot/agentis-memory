@@ -25,6 +25,29 @@ services:
     networks:
       - agentis-net
 
+  # Native image variant — build with: docker compose --profile native up
+  agentis-memory-native:
+    build:
+      context: .
+      dockerfile: Dockerfile.native
+    image: agentis-memory:native
+    container_name: agentis-memory-native
+    ports:
+      - "6398:6399"
+    volumes:
+      - agentis-native-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/6399 && printf '*1\\r\\n$4\\r\\nPING\\r\\n' >&3 && read -t 2 line <&3 && [[ \"$$line\" == *PONG* ]]"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    profiles:
+      - native
+    networks:
+      - agentis-net
+
   redis-insight:
     # Pin to a specific version for reproducibility.
     # Check https://hub.docker.com/r/redis/redisinsight/tags for the latest release.
@@ -43,6 +66,7 @@ services:
 
 volumes:
   agentis-data:
+  agentis-native-data:
   redisinsight-data:
 
 networks:

@@ -16,6 +16,25 @@ services:
     networks:
       - bench-net
 
+  agentis-native:
+    build:
+      context: ..
+      dockerfile: Dockerfile.native
+    image: agentis-memory:native
+    container_name: bench-agentis-native
+    ports:
+      - "6398:6399"
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/6399 && printf '*1\\r\\n$4\\r\\nPING\\r\\n' >&3 && read -t 2 line <&3 && [[ \"$$line\" == *PONG* ]]"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 30s
+    profiles:
+      - native
+    networks:
+      - bench-net
+
   redis:
     image: redis:7.4
     container_name: bench-redis
