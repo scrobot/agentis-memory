@@ -1,7 +1,10 @@
 # ─── Stage 1: Build native binary ────────────────────────────────────────────
-FROM ghcr.io/graalvm/native-image-community:26 AS builder
+FROM ghcr.io/graalvm/native-image-community:25 AS builder
 
 WORKDIR /workspace
+
+# Install findutils (provides xargs, required by gradlew)
+RUN microdnf install -y findutils && microdnf clean all
 
 # Copy Gradle wrapper and build files first for layer caching
 COPY gradlew gradlew.bat ./
@@ -24,7 +27,7 @@ RUN ./gradlew nativeCompile --no-daemon -x test
 FROM debian:bookworm-slim AS runtime
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libstdc++6 \
+    libstdc++6 zlib1g \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -41,6 +44,6 @@ RUN mkdir -p /data
 EXPOSE 6399
 
 HEALTHCHECK --interval=10s --timeout=3s --start-period=5s \
-    CMD redis-cli -p 6399 ping || exit 1
+    CMD exec 3<>/dev/tcp/localhost/6399 && printf '*1\r\n$4\r\nPING\r\n' >&3 && read -t 2 line <&3 && [[ "$line" == *PONG* ]]
 
 CMD ["./agentis-memory", "--port", "6399", "--bind", "0.0.0.0", "--data-dir", "/data"]

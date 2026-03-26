@@ -1,5 +1,5 @@
 # ─── Stage 1: Build ───────────────────────────────────────────────────────────
-FROM docker.io/library/amazoncorretto:26-al2023 AS builder
+FROM docker.io/library/amazoncorretto:25-al2023 AS builder
 
 WORKDIR /workspace
 
@@ -30,9 +30,9 @@ RUN ./gradlew installDist --no-daemon -x test
 
 # ─── Stage 2: Runtime ─────────────────────────────────────────────────────────
 # Use the headless variant (no AWT/Swing/sound) to keep the runtime image lean.
-# amazoncorretto:26-al2023-headless is publicly available on Docker Hub without auth.
+# amazoncorretto:25-al2023-headless is publicly available on Docker Hub without auth.
 # Switch to eclipse-temurin:26-jre once it reaches Docker Hub stable.
-FROM docker.io/library/amazoncorretto:26-al2023-headless AS runtime
+FROM docker.io/library/amazoncorretto:25-al2023-headless AS runtime
 
 # Install findutils (provides xargs) required by the Gradle-generated start script
 RUN dnf install -y findutils && dnf clean all
