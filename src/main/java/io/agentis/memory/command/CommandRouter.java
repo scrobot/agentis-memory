@@ -71,8 +71,24 @@ public class CommandRouter {
             return new RespMessage.Error("ERR unknown command '" + name + "'");
         }
 
-        log.debug("CMD {} from {}", name, ctx.channel().remoteAddress());
-        return handler.handle(ctx, args);
+        RespMessage response = handler.handle(ctx, args);
+        if (response instanceof RespMessage.Error err) {
+            log.warn("CMD {} from {} → ERROR: {}", name, ctx.channel().remoteAddress(), err.message());
+        } else {
+            log.info("CMD {} from {} → {}", name, ctx.channel().remoteAddress(), describeResponse(response));
+        }
+        return response;
+    }
+
+    private static String describeResponse(RespMessage response) {
+        return switch (response) {
+            case RespMessage.SimpleString s -> s.value();
+            case RespMessage.RespInteger i -> String.valueOf(i.value());
+            case RespMessage.BulkString b -> b.value() == null ? "nil" : "(bulk " + b.value().length + "b)";
+            case RespMessage.RespArray a -> a.elements() == null ? "nil" : "(array " + a.elements().size() + ")";
+            case RespMessage.Error e -> e.message();
+            default -> response.getClass().getSimpleName();
+        };
     }
 
     // Commands that are always allowed even without AUTH
