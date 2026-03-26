@@ -23,6 +23,9 @@ Self-contained in-memory service providing "working memory" for AI agents. Combi
 ```
 agentis-memory/
 ├── CLAUDE.md
+├── build.gradle.kts
+├── gradle.properties                                  # dependency versions
+├── agentis-memory.conf.example
 ├── docs/
 │   └── superpowers/
 │       └── specs/
@@ -31,12 +34,72 @@ agentis-memory/
 │   ├── model.onnx                                     # all-MiniLM-L6-v2 (~80MB)
 │   ├── tokenizer.json
 │   └── tokenizer_config.json
-└── src/                                               # Not yet created
-    ├── main/java/
-    └── test/java/
+└── src/
+    ├── main/java/io/agentis/memory/
+    │   ├── AgentisMemory.java              # main(), startup, shutdown hook
+    │   ├── config/
+    │   │   └── ServerConfig.java           # CLI args + conf file parsing
+    │   ├── resp/
+    │   │   ├── RespMessage.java            # sealed interface: SimpleString, Error, Integer, BulkString, Array
+    │   │   ├── RespDecoder.java            # Netty ByteToMessageDecoder
+    │   │   ├── RespEncoder.java            # Netty MessageToByteEncoder
+    │   │   ├── RespServer.java             # Netty bootstrap, pipeline setup
+    │   │   └── CommandDispatcher.java      # Netty handler → CommandRouter
+    │   ├── command/
+    │   │   ├── CommandHandler.java         # interface: handle(ctx, args) → RespMessage
+    │   │   ├── CommandRouter.java          # command name → handler dispatch
+    │   │   ├── kv/                         # standard Redis commands
+    │   │   │   ├── SetCommand.java
+    │   │   │   ├── GetCommand.java
+    │   │   │   ├── DelCommand.java
+    │   │   │   ├── ExistsCommand.java
+    │   │   │   ├── ExpireCommand.java
+    │   │   │   ├── TtlCommand.java
+    │   │   │   ├── KeysCommand.java
+    │   │   │   ├── ScanCommand.java
+    │   │   │   ├── TypeCommand.java
+    │   │   │   ├── DbSizeCommand.java
+    │   │   │   ├── BgSaveCommand.java
+    │   │   │   ├── PingCommand.java
+    │   │   │   ├── QuitCommand.java
+    │   │   │   ├── AuthCommand.java
+    │   │   │   ├── InfoCommand.java
+    │   │   │   ├── ClientCommand.java
+    │   │   │   ├── ConfigCommand.java
+    │   │   │   └── CommandMetaCommand.java
+    │   │   └── mem/                        # custom memory commands
+    │   │       ├── MemSaveCommand.java
+    │   │       ├── MemQueryCommand.java
+    │   │       ├── MemDelCommand.java
+    │   │       └── MemStatusCommand.java
+    │   ├── store/
+    │   │   ├── Entry.java                  # record: value, createdAt, expireAt, hasVectorIndex
+    │   │   ├── KvStore.java                # ConcurrentHashMap<String, Entry>
+    │   │   ├── ExpiryManager.java          # lazy + active expiry (Redis-style 25% threshold)
+    │   │   └── EvictionManager.java        # volatile-lru eviction
+    │   ├── vector/
+    │   │   ├── Chunk.java                  # record: parentKey, index, text, vector, namespace
+    │   │   ├── Chunker.java                # sentence-boundary splitting with overlap
+    │   │   ├── Embedder.java               # ONNX Runtime inference, batching
+    │   │   ├── HnswIndex.java              # jvector HNSW wrapper, namespace post-filter
+    │   │   └── VectorEngine.java           # coordinator + per-key IndexStatus tracking
+    │   └── persistence/
+    │       ├── AofWriter.java              # append-only file, configurable fsync
+    │       ├── AofReader.java              # AOF replay for recovery
+    │       ├── SnapshotWriter.java         # periodic KV + HNSW snapshots (AGMM format)
+    │       └── SnapshotReader.java         # recovery coordinator
+    └── test/java/io/agentis/memory/
+        ├── resp/RespDecoderTest.java
+        ├── store/KvStoreTest.java
+        ├── vector/ChunkerTest.java
+        ├── vector/EmbedderTest.java
+        ├── vector/HnswIndexTest.java
+        └── integration/
+            ├── RedisClientCompatTest.java  # Jedis against running server
+            └── MemoryE2eTest.java          # MEMSAVE → MEMQUERY end-to-end
 ```
 
-The project is in **pre-implementation phase**. The design spec is complete and reviewed. No source code exists yet.
+The project is in **early implementation phase**. Design spec is complete and reviewed. All source file stubs are in place; logic is pending.
 
 ## Architecture
 

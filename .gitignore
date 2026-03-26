@@ -1,0 +1,24 @@
+# Gradle
+.gradle/
+build/
+gradle-app.setting
+!gradle-wrapper.jar
+
+# GraalVM native image output
+agentis-memory
+agentis-memory.exe
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.class
+
+# Data directory (AOF + snapshots produced at runtime)
+data/
+
+# macOS
+.DS_Store
+
+# Logs
+*.log

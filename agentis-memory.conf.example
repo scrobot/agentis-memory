@@ -1,0 +1,34 @@
+# Agentis Memory — example configuration file
+# Copy to agentis-memory.conf and adjust as needed.
+# CLI flags override values set here.
+
+# Network
+port 6399
+bind 127.0.0.1
+
+# Authentication (uncomment to require AUTH before any command)
+# requirepass mysecretpassword
+
+# Storage
+data-dir ./data
+max-memory 256mb
+max-value-size 1mb
+max-chunks-per-key 100
+eviction-policy volatile-lru
+
+# Persistence
+aof-enabled true
+aof-fsync everysec
+snapshot-interval 300
+snapshot-after-changes 1000
+
+# Embedding
+embedding-threads 2
+# model-path ./models   # override bundled model location
+
+# Vector index (HNSW)
+hnsw-m 16
+hnsw-ef-construction 100
+
+# Logging
+log-level info
