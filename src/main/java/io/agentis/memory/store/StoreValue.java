@@ -1,5 +1,6 @@
 package io.agentis.memory.store;
 
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -8,7 +9,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * Polymorphic value stored in the KV store.
  * Each permitted type corresponds to a Redis data type.
  */
-public sealed interface StoreValue permits StoreValue.StringValue, StoreValue.HashValue, StoreValue.ListValue, StoreValue.SortedSetValue {
+public sealed interface StoreValue permits StoreValue.StringValue, StoreValue.HashValue, StoreValue.ListValue, StoreValue.SortedSetValue, StoreValue.SetValue {
 
     record StringValue(byte[] raw) implements StoreValue {}
 
@@ -34,4 +35,10 @@ public sealed interface StoreValue permits StoreValue.StringValue, StoreValue.Ha
             ConcurrentHashMap<String, Double> memberToScore,
             ConcurrentSkipListMap<Double, java.util.TreeSet<String>> scoreToMembers
     ) implements StoreValue {}
+
+    record SetValue(Set<String> members) implements StoreValue {
+        public SetValue() {
+            this(ConcurrentHashMap.newKeySet());
+        }
+    }
 }

@@ -76,9 +76,6 @@ public class KvStore {
 
     /**
      * Returns the SortedSetValue for a key, or null if missing/expired.
-     * Throws WRONGTYPE error via returned null + caller must check type separately.
-     * Use {@link #getSortedSet(String)} which handles expiry; this helper returns
-     * null if the key does not exist or has the wrong type.
      */
     public StoreValue.SortedSetValue getSortedSet(String key) {
         Entry e = store.get(key);
@@ -90,7 +87,7 @@ public class KvStore {
         if (e.value() instanceof StoreValue.SortedSetValue sv) {
             return sv;
         }
-        return null;  // wrong type — caller must check with getEntry() if needed
+        return null;
     }
 
     /**
@@ -109,7 +106,6 @@ public class KvStore {
             }
             return null;  // WRONGTYPE
         }
-        // Create new sorted set
         StoreValue.SortedSetValue sv = new StoreValue.SortedSetValue(
                 new java.util.concurrent.ConcurrentHashMap<>(),
                 new java.util.concurrent.ConcurrentSkipListMap<>()
@@ -126,6 +122,46 @@ public class KvStore {
                 store.remove(key);
             }
         }
+    }
+
+    // ── Set operations ───────────────────────────────────────────────────────
+
+    /**
+     * Returns the SetValue for a key, or null if the key does not exist.
+     * Throws WrongTypeException if the key holds a non-set value.
+     */
+    public StoreValue.SetValue getSet(String key) {
+        Entry e = getEntry(key);
+        if (e == null) return null;
+        if (e.value() instanceof StoreValue.SetValue sv) return sv;
+        throw new WrongTypeException();
+    }
+
+    /**
+     * Returns the SetValue for a key, creating an empty set if the key does not exist.
+     * Throws WrongTypeException if the key holds a non-set value.
+     */
+    public StoreValue.SetValue getOrCreateSet(String key) {
+        Entry e = store.get(key);
+        if (e != null && e.isExpired()) {
+            store.remove(key);
+            e = null;
+        }
+        if (e == null) {
+            StoreValue.SetValue sv = new StoreValue.SetValue();
+            store.put(key, new Entry(sv, System.currentTimeMillis(), -1, false));
+            return sv;
+        }
+        if (e.value() instanceof StoreValue.SetValue sv) return sv;
+        throw new WrongTypeException();
+    }
+
+    /** Removes the key if the set is empty. */
+    public void removeIfEmptySet(String key) {
+        store.computeIfPresent(key, (k, e) -> {
+            if (e.value() instanceof StoreValue.SetValue sv && sv.members().isEmpty()) return null;
+            return e;
+        });
     }
 
     public int size() {
@@ -636,6 +672,9 @@ public class KvStore {
 
     /** Thrown when an operation is issued against a key of the wrong type. */
     public static class WrongTypeException extends RuntimeException {
+        public WrongTypeException() {
+            super("WRONGTYPE Operation against a key holding the wrong kind of value");
+        }
         public WrongTypeException(String message) { super(message); }
     }
 }
