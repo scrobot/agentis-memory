@@ -31,6 +31,50 @@ public class KvStore {
         store.put(key, new Entry(new StoreValue.StringValue(value), System.currentTimeMillis(), expireAt, false));
     }
 
+    /**
+     * Conditional set with NX/XX semantics.
+     *
+     * @param key       the key
+     * @param value     the value to store
+     * @param ttlMillis TTL in milliseconds; -1 means no expiry
+     * @param nx        if true, only set when key does NOT exist (or is expired)
+     * @param xx        if true, only set when key DOES exist (and is not expired)
+     * @return the previous raw string value (or null if none), used for GET option;
+     *         returns null also when the condition was not met — callers must
+     *         distinguish via the returned {@link SetResult}
+     */
+    public SetResult setConditional(String key, byte[] value, long ttlMillis, boolean nx, boolean xx) {
+        // We need atomicity for NX/XX — use compute to avoid TOCTOU races.
+        final byte[][] oldValue = {null};
+        final boolean[] conditionMet = {true};
+
+        store.compute(key, (k, existing) -> {
+            boolean exists = existing != null && !existing.isExpired();
+
+            // Capture old value for GET option
+            if (exists && existing.value() instanceof StoreValue.StringValue sv) {
+                oldValue[0] = sv.raw();
+            }
+
+            if (nx && exists) {
+                conditionMet[0] = false;
+                return existing; // leave unchanged
+            }
+            if (xx && !exists) {
+                conditionMet[0] = false;
+                return existing; // leave unchanged (null stays null)
+            }
+
+            long expireAt = ttlMillis > 0 ? System.currentTimeMillis() + ttlMillis : -1;
+            return new Entry(new StoreValue.StringValue(value), System.currentTimeMillis(), expireAt, false);
+        });
+
+        return new SetResult(conditionMet[0], oldValue[0]);
+    }
+
+    /** Result of a conditional SET operation. */
+    public record SetResult(boolean conditionMet, byte[] previousValue) {}
+
     /** Returns the raw bytes for a string key, or null if missing/expired/wrong type. */
     public byte[] get(String key) {
         Entry e = store.get(key);

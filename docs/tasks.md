@@ -52,7 +52,7 @@ TYPE command must return correct type. SCAN/KEYS must iterate all types. DEL/EXI
 **Spec:** [docs/commands/server.md](commands/server.md) — SELECT, FLUSHDB, FLUSHALL, ECHO, TIME
 **Test:** FLUSHDB clears all data. TIME returns valid timestamp. SELECT 0 → OK.
 
-### 🔲 2i: Extend SET command with NX/XX/PX/GET options
+### ✅ 2i: Extend SET command with NX/XX/PX/GET options
 **Spec:** [docs/commands/strings-basic.md](commands/strings-basic.md) — full SET syntax
 **Test:** SET with NX (set only if not exists), XX (set only if exists), PX (ms TTL), GET (return old value).
 
