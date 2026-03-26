@@ -20,7 +20,7 @@ The KV Store must evolve from `ConcurrentHashMap<String, Entry>` (string-only) t
 
 TYPE command must return correct type. SCAN/KEYS must iterate all types. DEL/EXISTS/EXPIRE/TTL/RENAME/PERSIST/PEXPIRE/PTTL/UNLINK must work across all types.
 
-### 🔲 2a: Refactor KV Store for multi-type support 🔀
+### ✅ 2a: Refactor KV Store for multi-type support 🔀
 **Spec:** Refactor `Entry` and `KvStore` to support multiple value types. `Entry.value` changes from `byte[]` to a polymorphic type. All existing string commands continue to work. TYPE returns `string` for existing keys.
 **Test:** All existing tests pass. TYPE returns `string`.
 
