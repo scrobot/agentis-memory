@@ -32,7 +32,7 @@ TYPE command must return correct type. SCAN/KEYS must iterate all types. DEL/EXI
 **Spec:** [docs/commands/lists.md](commands/lists.md) — 11 commands
 **Test:** Unit test per command. Integration test: LPUSH/RPUSH/LPOP/LRANGE via Jedis. TYPE returns `list`.
 
-### 🔲 2d: Sorted Set commands 🔀 (after 2a)
+### ✅ 2d: Sorted Set commands 🔀 (after 2a)
 **Spec:** [docs/commands/sorted-sets.md](commands/sorted-sets.md) — 14 commands
 **Test:** Unit test per command. Integration test: ZADD/ZSCORE/ZRANGE/ZRANGEBYSCORE via Jedis. TYPE returns `zset`.
 

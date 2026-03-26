@@ -1,4 +1,4 @@
-package io.agentis.memory.command.kv;
+package io.agentis.memory.command.zset;
 
 import io.agentis.memory.command.CommandHandler;
 import io.agentis.memory.resp.RespMessage;
@@ -8,38 +8,38 @@ import io.netty.channel.ChannelHandlerContext;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
-// TYPE key — returns the Redis type name of the value stored at key, or +none if absent
+// ZCARD key
 @Singleton
-public class TypeCommand implements CommandHandler {
+public class ZCardCommand implements CommandHandler {
 
     private final KvStore kvStore;
 
     @Inject
-    public TypeCommand(KvStore kvStore) {
+    public ZCardCommand(KvStore kvStore) {
         this.kvStore = kvStore;
     }
 
     @Override
     public RespMessage handle(ChannelHandlerContext ctx, List<byte[]> args) {
         if (args.size() < 2) {
-            return new RespMessage.Error("ERR wrong number of arguments for 'TYPE'");
+            return new RespMessage.Error("ERR wrong number of arguments for 'ZCARD'");
         }
-        String key = new String(args.get(1));
+        String key = new String(args.get(1), StandardCharsets.UTF_8);
         KvStore.Entry entry = kvStore.getEntry(key);
         if (entry == null) {
-            return new RespMessage.SimpleString("none");
+            return new RespMessage.RespInteger(0);
         }
-        String typeName = switch (entry.value()) {
-            case StoreValue.StringValue ignored -> "string";
-            case StoreValue.SortedSetValue ignored -> "zset";
-        };
-        return new RespMessage.SimpleString(typeName);
+        if (!(entry.value() instanceof StoreValue.SortedSetValue sv)) {
+            return ZSetUtil.WRONGTYPE;
+        }
+        return new RespMessage.RespInteger(sv.memberToScore().size());
     }
 
     @Override
     public String name() {
-        return "TYPE";
+        return "ZCARD";
     }
 }
