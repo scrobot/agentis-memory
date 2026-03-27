@@ -40,7 +40,7 @@ class ExistsCommandTest {
         kvStore.getStore().put("tmp", new KvStore.Entry(
                 new StoreValue.StringValue("v".getBytes(StandardCharsets.UTF_8)),
                 System.currentTimeMillis() - 5000,
-                System.currentTimeMillis() - 1,
+                System.currentTimeMillis() - 100,
                 false));
         assertEquals(0L, ((RespMessage.RespInteger) cmd.handle(null, args("EXISTS", "tmp"))).value());
     }

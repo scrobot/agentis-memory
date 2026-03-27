@@ -42,7 +42,7 @@ class TypeCommandTest {
         kvStore.getStore().put("tmp", new KvStore.Entry(
                 new StoreValue.StringValue("v".getBytes(StandardCharsets.UTF_8)),
                 System.currentTimeMillis() - 5000,
-                System.currentTimeMillis() - 1,
+                System.currentTimeMillis() - 100,
                 false));
         assertEquals("none", ((RespMessage.SimpleString) cmd.handle(null, args("TYPE", "tmp"))).value());
     }

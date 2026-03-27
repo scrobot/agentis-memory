@@ -47,7 +47,7 @@ class TtlCommandTest {
         kvStore.getStore().put("k1", new KvStore.Entry(
                 new StoreValue.StringValue("v".getBytes(StandardCharsets.UTF_8)),
                 System.currentTimeMillis() - 5000,
-                System.currentTimeMillis() - 1,
+                System.currentTimeMillis() - 100,
                 false));
         assertEquals(-2L, ((RespMessage.RespInteger) cmd.handle(null, args("TTL", "k1"))).value());
     }
