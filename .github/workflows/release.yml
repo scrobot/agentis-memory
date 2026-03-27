@@ -10,7 +10,7 @@ permissions:
   id-token: write
 
 jobs:
-  test:
+  unit-test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -25,12 +25,63 @@ jobs:
       - name: Unit tests
         run: ./gradlew test
 
+  build-image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Docker Hub login (optional, avoids rate limits)
+        if: secrets.DOCKERHUB_USERNAME != ''
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Clear stale Docker credentials
+        if: secrets.DOCKERHUB_USERNAME == ''
+        run: docker logout 2>/dev/null || true
+
+      - name: Build Docker image
+        run: docker build -t agentis-memory:test .
+
+      - name: Save Docker image
+        run: docker save agentis-memory:test | gzip > /tmp/agentis-memory-test.tar.gz
+
+      - name: Upload Docker image
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-image
+          path: /tmp/agentis-memory-test.tar.gz
+          retention-days: 1
+
+  integration-test:
+    runs-on: ubuntu-latest
+    needs: build-image
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: graalvm/setup-graalvm@v1
+        with:
+          java-version: '25'
+          distribution: 'graalvm-community'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Download Docker image
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-image
+          path: /tmp
+
+      - name: Load Docker image
+        run: docker load < /tmp/agentis-memory-test.tar.gz
+
       - name: Integration tests
         run: ./gradlew integrationTest
 
-  docker:
-    needs: test
+  push-image:
     runs-on: ubuntu-latest
+    needs: [unit-test, integration-test]
     steps:
       - uses: actions/checkout@v4
 
@@ -55,14 +106,14 @@ jobs:
           push: true
           platforms: linux/amd64,linux/arm64
           tags: |
-            scrobot/agentis-memory:latest
-            scrobot/agentis-memory:${{ steps.version.outputs.tag }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/agentis-memory:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/agentis-memory:${{ steps.version.outputs.tag }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
   docs:
-    needs: test
     runs-on: ubuntu-latest
+    needs: [unit-test, integration-test]
     steps:
       - uses: actions/checkout@v4
 
