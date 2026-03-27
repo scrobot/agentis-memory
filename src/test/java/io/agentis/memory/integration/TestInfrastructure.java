@@ -13,7 +13,13 @@ public class TestInfrastructure {
 
     public static synchronized void buildImageOnce() {
         if (built) return;
-        
+
+        if (imageExists()) {
+            log.info("Docker image {} already exists, skipping build", IMAGE_NAME);
+            built = true;
+            return;
+        }
+
         String root = projectRoot();
         log.info("Building Docker image {} from {}...", IMAGE_NAME, root);
         try {
@@ -34,6 +40,21 @@ public class TestInfrastructure {
             built = true;
         } catch (Exception e) {
             throw new RuntimeException("Failed to build Docker image", e);
+        }
+    }
+
+    private static boolean imageExists() {
+        try {
+            var process = new ProcessBuilder("docker", "images", "-q", IMAGE_NAME)
+                    .redirectErrorStream(true)
+                    .start();
+            String output;
+            try (var is = process.getInputStream()) {
+                output = new String(is.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8).trim();
+            }
+            return process.waitFor() == 0 && !output.isEmpty();
+        } catch (Exception e) {
+            return false;
         }
     }
 
