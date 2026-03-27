@@ -1,0 +1,11 @@
+{
+  "name": "agentis-memory",
+  "version": "0.1.0",
+  "description": "Semantic working memory for AI agents via Agentis Memory server (Redis-compatible protocol)",
+  "author": {
+    "name": "Agentis Memory",
+    "url": "https://github.com/agentis-memory/agentis-memory"
+  },
+  "license": "Apache-2.0",
+  "keywords": ["memory", "vector-search", "embedding", "redis", "agent-memory"]
+}
