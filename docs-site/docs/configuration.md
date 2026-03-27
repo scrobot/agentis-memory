@@ -87,7 +87,7 @@ Defaults (`m=16`, `efConstruction=100`) work well for up to ~1M vectors. Increas
 Configuration can also be passed via `AGENTIS_OPTS` environment variable (useful for Docker):
 
 ```bash
-docker run -e AGENTIS_OPTS="--requirepass secret --max-memory 512mb" agentismemory/agentis-memory
+docker run -e AGENTIS_OPTS="--requirepass secret --max-memory 512mb" scrobot/agentis-memory
 ```
 
 ## Security

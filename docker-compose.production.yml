@@ -1,0 +1,34 @@
+services:
+  agentis-memory:
+    image: scrobot/agentis-memory:latest
+    container_name: agentis-memory
+    ports:
+      - "6399:6399"
+    volumes:
+      - agentis-data:/data
+    environment:
+      - AGENTIS_OPTS=--requirepass ${AGENTIS_PASSWORD:-}
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/6399 && printf '*1\\r\\n$$4\\r\\nPING\\r\\n' >&3 && read -t 2 line <&3 && [[ \"$$line\" == *PONG* ]]"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  redis-insight:
+    image: redis/redisinsight:2.66
+    container_name: redis-insight
+    ports:
+      - "5540:5540"
+    depends_on:
+      agentis-memory:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  agentis-data:

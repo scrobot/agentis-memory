@@ -19,7 +19,7 @@ Use the pre-built image from Docker Hub:
 ```yaml title="docker-compose.production.yml"
 services:
   agentis-memory:
-    image: agentismemory/agentis-memory:latest
+    image: scrobot/agentis-memory:latest
     container_name: agentis-memory
     ports:
       - "6399:6399"
