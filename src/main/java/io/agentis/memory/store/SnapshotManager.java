@@ -1,6 +1,7 @@
 package io.agentis.memory.store;
 
 import io.agentis.memory.config.ServerConfig;
+import io.agentis.memory.util.CachedClock;
 import io.agentis.memory.vector.Chunk;
 import io.agentis.memory.vector.HnswIndex;
 import jakarta.inject.Inject;
@@ -48,8 +49,7 @@ public class SnapshotManager {
     }
 
     public boolean shouldSnapshot() {
-        long now = System.currentTimeMillis();
-        long elapsed = (now - lastSnapshotTime) / 1000;
+        long elapsed = (CachedClock.now() - lastSnapshotTime) / 1000;
         return dirtyCount.get() >= config.snapshotAfterChanges && elapsed >= config.snapshotInterval;
     }
 

@@ -1,6 +1,7 @@
 package io.agentis.memory.store;
 
 import io.agentis.memory.config.ServerConfig;
+import io.agentis.memory.util.CachedClock;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import org.slf4j.Logger;
@@ -25,7 +26,7 @@ public class KvStore {
 
     public record Entry(StoreValue value, long createdAt, long expireAt, boolean hasVectorIndex) {
         public boolean isExpired() {
-            return expireAt != -1 && System.currentTimeMillis() > expireAt;
+            return expireAt != -1 && CachedClock.now() > expireAt;
         }
     }
 
@@ -34,8 +35,8 @@ public class KvStore {
     }
 
     public void set(String key, byte[] value, long ttlSeconds, boolean hasVectorIndex) {
-        long expireAt = ttlSeconds > 0 ? System.currentTimeMillis() + (ttlSeconds * 1000) : -1;
-        store.put(key, new Entry(new StoreValue.StringValue(value), System.currentTimeMillis(), expireAt, hasVectorIndex));
+        long expireAt = ttlSeconds > 0 ? CachedClock.now() + (ttlSeconds * 1000) : -1;
+        store.put(key, new Entry(new StoreValue.StringValue(value), CachedClock.now(), expireAt, hasVectorIndex));
     }
 
     public void putEntry(String key, Entry entry) {
@@ -76,8 +77,8 @@ public class KvStore {
                 return existing; // leave unchanged (null stays null)
             }
 
-            long expireAt = ttlMillis > 0 ? System.currentTimeMillis() + ttlMillis : -1;
-            return new Entry(new StoreValue.StringValue(value), System.currentTimeMillis(), expireAt, false);
+            long expireAt = ttlMillis > 0 ? CachedClock.now() + ttlMillis : -1;
+            return new Entry(new StoreValue.StringValue(value), CachedClock.now(), expireAt, false);
         });
 
         return new SetResult(conditionMet[0], oldValue[0]);
@@ -121,7 +122,7 @@ public class KvStore {
             store.remove(key);
             return false;
         }
-        long expireAt = System.currentTimeMillis() + (seconds * 1000);
+        long expireAt = CachedClock.now() + (seconds * 1000);
         store.put(key, new Entry(e.value(), e.createdAt(), expireAt, e.hasVectorIndex()));
         return true;
     }
@@ -162,7 +163,7 @@ public class KvStore {
                 new java.util.concurrent.ConcurrentHashMap<>(),
                 new java.util.concurrent.ConcurrentSkipListMap<>()
         );
-        store.put(key, new Entry(sv, System.currentTimeMillis(), -1, false));
+        store.put(key, new Entry(sv, CachedClock.now(), -1, false));
         return sv;
     }
 
@@ -201,7 +202,7 @@ public class KvStore {
         }
         if (e == null) {
             StoreValue.SetValue sv = new StoreValue.SetValue();
-            store.put(key, new Entry(sv, System.currentTimeMillis(), -1, false));
+            store.put(key, new Entry(sv, CachedClock.now(), -1, false));
             return sv;
         }
         if (e.value() instanceof StoreValue.SetValue sv) return sv;
@@ -225,7 +226,7 @@ public class KvStore {
             store.remove(key);
             return false;
         }
-        long expireAt = System.currentTimeMillis() + millis;
+        long expireAt = CachedClock.now() + millis;
         store.put(key, new Entry(e.value(), e.createdAt(), expireAt, e.hasVectorIndex()));
         return true;
     }
@@ -256,7 +257,7 @@ public class KvStore {
      * Sets only if key does not exist. Returns true if set, false if already existed.
      */
     public boolean setNx(String key, byte[] value) {
-        long now = System.currentTimeMillis();
+        long now = CachedClock.now();
         Entry newEntry = new Entry(new StoreValue.StringValue(value), now, -1, false);
         return store.putIfAbsent(key, newEntry) == null;
     }
@@ -267,7 +268,7 @@ public class KvStore {
      * Throws WrongTypeException if key exists but holds a non-string type.
      */
     public byte[] getAndSet(String key, byte[] newValue) {
-        long now = System.currentTimeMillis();
+        long now = CachedClock.now();
         Entry newEntry = new Entry(new StoreValue.StringValue(newValue), now, -1, false);
         Entry old = store.put(key, newEntry);
         if (old == null || old.isExpired()) return null;
@@ -301,7 +302,7 @@ public class KvStore {
         while (true) {
             Entry e = store.get(key);
             if (e == null || e.isExpired()) {
-                Entry newEntry = new Entry(new StoreValue.StringValue(suffix), System.currentTimeMillis(), -1, false);
+                Entry newEntry = new Entry(new StoreValue.StringValue(suffix), CachedClock.now(), -1, false);
                 if (store.putIfAbsent(key, newEntry) == null) return suffix.length;
                 continue;
             }
@@ -348,7 +349,7 @@ public class KvStore {
         }
         if (e == null) {
             StoreValue.HashValue hv = new StoreValue.HashValue();
-            store.put(key, new Entry(hv, System.currentTimeMillis(), -1, false));
+            store.put(key, new Entry(hv, CachedClock.now(), -1, false));
             return hv;
         }
         if (e.value() instanceof StoreValue.HashValue hv) {
@@ -602,7 +603,7 @@ public class KvStore {
         if (e != null && e.isExpired()) { store.remove(key); e = null; }
         if (e == null) {
             StoreValue.ListValue lv = new StoreValue.ListValue(new CopyOnWriteArrayList<>());
-            store.put(key, new Entry(lv, System.currentTimeMillis(), -1, false));
+            store.put(key, new Entry(lv, CachedClock.now(), -1, false));
             return lv;
         }
         if (!(e.value() instanceof StoreValue.ListValue lv)) {
