@@ -14,8 +14,52 @@ redis-cli -p 6399 MEMQUERY agent "what language" 5
 ### Docker (recommended)
 
 ```bash
-docker compose up -d
+docker run -d --name agentis-memory \
+  -p 6399:6399 \
+  -v agentis-data:/data \
+  scrobot/agentis-memory:v1.0.0
 ```
+
+All parameters are passed as command arguments:
+
+```bash
+docker run -d --name agentis-memory \
+  -p 6399:6399 \
+  -v agentis-data:/data \
+  scrobot/agentis-memory:v1.0.0 \
+  ./agentis-memory \
+    --port 6399 \
+    --bind 0.0.0.0 \
+    --requirepass mysecret \
+    --data-dir /data \
+    --max-memory 512mb \
+    --aof-fsync everysec
+```
+
+<details>
+<summary>Full parameter reference</summary>
+
+| Parameter | Default | Description |
+|---|---|---|
+| `--port` | `6399` | TCP port |
+| `--bind` | `127.0.0.1` | Bind address (`0.0.0.0` in Docker) |
+| `--requirepass` | _(none)_ | Password for AUTH |
+| `--data-dir` | `./data` | AOF + snapshot directory |
+| `--max-memory` | `256mb` | KV value bytes limit (supports `kb`, `mb`, `gb`) |
+| `--max-value-size` | `1mb` | Max size per key |
+| `--max-chunks-per-key` | `100` | Max chunks from one MEMSAVE |
+| `--eviction-policy` | `volatile-lru` | Eviction policy |
+| `--aof-fsync` | `everysec` | AOF fsync: `always` / `everysec` / `no` |
+| `--no-aof` | _(off)_ | Disable AOF persistence entirely |
+| `--snapshot-interval` | `300` | Auto-snapshot interval in seconds (0 = off) |
+| `--snapshot-after-changes` | `1000` | Snapshot after N writes |
+| `--embedding-threads` | `2` | ONNX inference threads |
+| `--model-path` | _(bundled)_ | Custom path to ONNX model directory |
+| `--hnsw-m` | `16` | HNSW M parameter (graph connectivity) |
+| `--hnsw-ef-construction` | `100` | HNSW efConstruction (index build quality) |
+| `--log-level` | `info` | Log level |
+
+</details>
 
 Verify:
 
@@ -45,6 +89,12 @@ All standard Redis commands work too:
 redis-cli -p 6399 SET session:id "abc-123"
 redis-cli -p 6399 HSET config model gpt-4 temperature 0.7
 redis-cli -p 6399 DBSIZE
+```
+
+### Docker Compose
+
+```bash
+docker compose up -d
 ```
 
 ### Native binary
