@@ -15,6 +15,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.LongAdder;
 
 @Singleton
@@ -29,6 +30,7 @@ public class CommandRouter {
 
     private final LongAdder commandsProcessed = new LongAdder();
     private final LongAdder commandErrors = new LongAdder();
+    private final ConcurrentHashMap<String, LongAdder> commandCounters = new ConcurrentHashMap<>();
 
     @Inject
     public CommandRouter(ServerConfig config, AofWriter aofWriter, SnapshotManager snapshotManager, List<CommandHandler> commandHandlers) {
@@ -97,6 +99,7 @@ public class CommandRouter {
             }
         } else {
             commandsProcessed.increment();
+            commandCounters.computeIfAbsent(name, _ -> new LongAdder()).increment();
             if (conn != null) {
                 if (log.isDebugEnabled()) {
                     log.debug("CMD {} from {} → {}", name, conn.remoteAddress(), describeResponse(response));
@@ -125,6 +128,12 @@ public class CommandRouter {
 
     public long getCommandsProcessed() { return commandsProcessed.sum(); }
     public long getCommandErrors() { return commandErrors.sum(); }
+
+    public Map<String, Long> getCommandCounts() {
+        var snapshot = new java.util.LinkedHashMap<String, Long>();
+        commandCounters.forEach((cmd, adder) -> snapshot.put(cmd, adder.sum()));
+        return snapshot;
+    }
 
     private static String toUpperCase(byte[] bytes) {
         byte[] upper = new byte[bytes.length];
