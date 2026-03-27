@@ -20,12 +20,14 @@ public class TestInfrastructure {
             var process = new ProcessBuilder("docker", "build", "-t", IMAGE_NAME, root)
                     .redirectErrorStream(true)
                     .start();
-            // Drain output to avoid blocking
+            // Capture output so we can log it on failure
+            String output;
             try (var is = process.getInputStream()) {
-                is.transferTo(java.io.OutputStream.nullOutputStream());
+                output = new String(is.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
             }
             int exitCode = process.waitFor();
             if (exitCode != 0) {
+                log.error("Docker build output:\n{}", output);
                 throw new RuntimeException("Docker build failed with exit code " + exitCode);
             }
             log.info("Docker image {} built successfully", IMAGE_NAME);
