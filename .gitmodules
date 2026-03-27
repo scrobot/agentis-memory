@@ -1,0 +1,3 @@
+[submodule "claude-plugin"]
+	path = claude-plugin
+	url = https://github.com/scrobot/agentis-memory-plugin.git
