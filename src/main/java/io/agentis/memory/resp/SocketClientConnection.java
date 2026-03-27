@@ -2,15 +2,17 @@ package io.agentis.memory.resp;
 
 import java.io.IOException;
 import java.net.Socket;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * ClientConnection backed by a plain Socket.
- * Per-connection attributes stored in a ConcurrentHashMap.
+ * Attributes stored as typed volatile fields instead of ConcurrentHashMap
+ * for zero-overhead access on the hot path.
  */
 public class SocketClientConnection implements ClientConnection {
     private final Socket socket;
-    private final ConcurrentHashMap<String, Object> attrs = new ConcurrentHashMap<>();
+    private volatile int protocolVersion = 2;
+    private volatile boolean authenticated;
+    private volatile String clientName;
 
     public SocketClientConnection(Socket socket) {
         this.socket = socket;
@@ -25,12 +27,22 @@ public class SocketClientConnection implements ClientConnection {
 
     @Override
     public void setAttribute(String key, Object value) {
-        attrs.put(key, value);
+        switch (key) {
+            case "protocol_version" -> protocolVersion = (Integer) value;
+            case "authenticated" -> authenticated = (Boolean) value;
+            case "client_name" -> clientName = (String) value;
+            default -> {} // ignore unknown attributes
+        }
     }
 
     @Override
     public Object getAttribute(String key) {
-        return attrs.get(key);
+        return switch (key) {
+            case "protocol_version" -> protocolVersion;
+            case "authenticated" -> authenticated;
+            case "client_name" -> clientName;
+            default -> null;
+        };
     }
 
     @Override
