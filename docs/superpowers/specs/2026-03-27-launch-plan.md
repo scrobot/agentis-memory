@@ -1,6 +1,6 @@
 # Agentis Memory — Launch Plan
 
-## 1. Claude Code Plugin
+## 1. Claude Code Plugin - DONE
 
 Плагин для Claude Code, позволяющий использовать Agentis Memory как рабочую память прямо из сессии.
 
