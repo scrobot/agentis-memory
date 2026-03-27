@@ -79,7 +79,10 @@ public class RespServer {
                     RespMessage response = router.dispatch(conn, msg);
                     if (response != null) {
                         writer.write(response);
-                        writer.flush();
+                        // Pipelining: only flush when no more buffered commands
+                        if (!parser.hasBufferedData()) {
+                            writer.flush();
+                        }
                     }
                 } catch (QuitException _) {
                     // QUIT command: write +OK, then close
