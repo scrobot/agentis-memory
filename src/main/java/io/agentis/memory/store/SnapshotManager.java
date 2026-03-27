@@ -35,6 +35,7 @@ public class SnapshotManager {
     private final AofWriter aofWriter;
     private final AtomicLong dirtyCount = new AtomicLong(0);
     private long lastSnapshotTime = System.currentTimeMillis();
+    private volatile boolean lastSnapshotSuccess = true;
 
     @Inject
     public SnapshotManager(ServerConfig config, KvStore kvStore, HnswIndex hnswIndex, AofWriter aofWriter) {
@@ -51,6 +52,14 @@ public class SnapshotManager {
     public boolean shouldSnapshot() {
         long elapsed = (CachedClock.now() - lastSnapshotTime) / 1000;
         return dirtyCount.get() >= config.snapshotAfterChanges && elapsed >= config.snapshotInterval;
+    }
+
+    public long getLastSnapshotTime() {
+        return lastSnapshotTime;
+    }
+
+    public boolean isLastSnapshotSuccessful() {
+        return lastSnapshotSuccess;
     }
 
     public synchronized void save() throws IOException {
@@ -79,7 +88,11 @@ public class SnapshotManager {
 
             dirtyCount.set(0);
             lastSnapshotTime = System.currentTimeMillis();
+            lastSnapshotSuccess = true;
             log.info("Snapshot saved in {}ms", System.currentTimeMillis() - start);
+        } catch (IOException e) {
+            lastSnapshotSuccess = false;
+            throw e;
         } finally {
             Files.deleteIfExists(tempKv);
             Files.deleteIfExists(tempHnsw);

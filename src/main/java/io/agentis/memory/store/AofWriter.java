@@ -176,6 +176,10 @@ public class AofWriter implements AutoCloseable {
         }
     }
 
+    public int getPendingWrites() {
+        return queue.size();
+    }
+
     @Override
     public void close() throws Exception {
         stopped.set(true);
