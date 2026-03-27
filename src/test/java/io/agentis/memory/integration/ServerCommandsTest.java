@@ -83,4 +83,34 @@ class ServerCommandsTest extends AbstractIntegrationTest {
             assertTrue(micros >= 0 && micros < 1_000_000, "TIME microseconds should be in [0, 1000000)");
         }
     }
+
+    @Test
+    void infoReturnsRealStats() {
+        try (Jedis jedis = jedisPool.getResource()) {
+            // Run some commands first
+            jedis.set("info-test-key", "value");
+            jedis.get("info-test-key");
+            jedis.get("info-test-key");
+
+            String info = jedis.info();
+
+            // Stats section has real values (not hardcoded zeros)
+            assertTrue(info.contains("total_commands_processed:"), "Should have total_commands_processed");
+            assertFalse(info.contains("total_commands_processed:0\r\n"), "total_commands_processed should not be 0");
+
+            // Clients section has real connection count
+            assertTrue(info.contains("connected_clients:"), "Should have connected_clients");
+
+            // Commandstats section exists with per-command data
+            assertTrue(info.contains("cmdstat_SET:calls="), "Should have cmdstat for SET");
+            assertTrue(info.contains("cmdstat_GET:calls="), "Should have cmdstat for GET");
+
+            // Persistence section exists
+            assertTrue(info.contains("rdb_last_save_time:"), "Should have rdb_last_save_time");
+            assertTrue(info.contains("aof_enabled:"), "Should have aof_enabled");
+
+            // Memory section
+            assertTrue(info.contains("used_memory:"), "Should have used_memory");
+        }
+    }
 }
