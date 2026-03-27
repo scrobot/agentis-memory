@@ -9,16 +9,14 @@ import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.LongAdder;
 
-/**
- * Parses the incoming RespMessage array into command name + args,
- * then dispatches to the appropriate CommandHandler.
- */
 @Singleton
 public class CommandRouter {
     private static final Logger log = LoggerFactory.getLogger(CommandRouter.class);
@@ -27,15 +25,17 @@ public class CommandRouter {
     private final ServerConfig config;
     private final AofWriter aofWriter;
     private final SnapshotManager snapshotManager;
+    private final boolean noAuth;
 
-    private final AtomicLong commandsProcessed = new AtomicLong();
-    private final AtomicLong commandErrors = new AtomicLong();
+    private final LongAdder commandsProcessed = new LongAdder();
+    private final LongAdder commandErrors = new LongAdder();
 
     @Inject
     public CommandRouter(ServerConfig config, AofWriter aofWriter, SnapshotManager snapshotManager, List<CommandHandler> commandHandlers) {
         this.config = config;
         this.aofWriter = aofWriter;
         this.snapshotManager = snapshotManager;
+        this.noAuth = config.requirepass == null || config.requirepass.isBlank();
 
         for (CommandHandler handler : commandHandlers) {
             handlers.put(handler.name().toUpperCase(), handler);
@@ -54,8 +54,8 @@ public class CommandRouter {
         List<byte[]> args = array.elements().stream()
                 .map(m -> switch (m) {
                     case RespMessage.BulkString b -> b.value();
-                    case RespMessage.SimpleString s -> s.value().getBytes(java.nio.charset.StandardCharsets.UTF_8);
-                    case RespMessage.RespInteger i -> java.lang.Long.toString(i.value()).getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                    case RespMessage.SimpleString s -> s.value().getBytes(StandardCharsets.UTF_8);
+                    case RespMessage.RespInteger i -> Long.toString(i.value()).getBytes(StandardCharsets.UTF_8);
                     default -> null;
                 })
                 .toList();
@@ -64,11 +64,10 @@ public class CommandRouter {
             return new RespMessage.Error("ERR empty command");
         }
 
-        String name = new String(args.getFirst()).toUpperCase();
+        String name = toUpperCase(args.getFirst());
 
-        // Auth check: if requirepass is set, ensure client is authenticated
-        if (conn != null && config.requirepass != null && !config.requirepass.isBlank()
-                && !NO_AUTH_COMMANDS.contains(name)) {
+        // Auth check — fast path: skip entirely when no password configured
+        if (!noAuth && conn != null && !NO_AUTH_COMMANDS.contains(name)) {
             Boolean authenticated = (Boolean) conn.getAttribute("authenticated");
             if (!Boolean.TRUE.equals(authenticated)) {
                 return new RespMessage.Error("NOAUTH Authentication required.");
@@ -77,7 +76,7 @@ public class CommandRouter {
 
         CommandHandler handler = handlers.get(name);
         if (handler == null) {
-            commandErrors.incrementAndGet();
+            commandErrors.increment();
             if (conn != null) {
                 log.warn("Unknown command '{}' from {}", name, conn.remoteAddress());
             } else {
@@ -88,38 +87,53 @@ public class CommandRouter {
 
         RespMessage response = handler.handle(conn, args);
         if (response instanceof RespMessage.Error err) {
-            commandErrors.incrementAndGet();
-            if (conn != null) {
-                log.debug("CMD {} from {} → ERROR: {}", name, conn.remoteAddress(), err.message());
-            } else {
-                log.debug("CMD {} during AOF replay → ERROR: {}", name, err.message());
+            commandErrors.increment();
+            if (log.isDebugEnabled()) {
+                if (conn != null) {
+                    log.debug("CMD {} from {} → ERROR: {}", name, conn.remoteAddress(), err.message());
+                } else {
+                    log.debug("CMD {} during AOF replay → ERROR: {}", name, err.message());
+                }
             }
         } else {
-            commandsProcessed.incrementAndGet();
+            commandsProcessed.increment();
             if (conn != null) {
-                log.debug("CMD {} from {} → {}", name, conn.remoteAddress(), describeResponse(response));
+                if (log.isDebugEnabled()) {
+                    log.debug("CMD {} from {} → {}", name, conn.remoteAddress(), describeResponse(response));
+                }
                 if (handler.isWriteCommand()) {
                     aofWriter.append(args);
                     snapshotManager.incrementDirty();
                     if (snapshotManager.shouldSnapshot()) {
-                        new Thread(() -> {
+                        Thread.startVirtualThread(() -> {
                             try {
                                 snapshotManager.save();
                             } catch (Exception e) {
                                 log.error("Auto-snapshot failed", e);
                             }
-                        }, "snapshot-worker").start();
+                        });
                     }
                 }
             } else {
-                log.trace("AOF replay: {} → {}", name, describeResponse(response));
+                if (log.isTraceEnabled()) {
+                    log.trace("AOF replay: {} → {}", name, describeResponse(response));
+                }
             }
         }
         return response;
     }
 
-    public long getCommandsProcessed() { return commandsProcessed.get(); }
-    public long getCommandErrors() { return commandErrors.get(); }
+    public long getCommandsProcessed() { return commandsProcessed.sum(); }
+    public long getCommandErrors() { return commandErrors.sum(); }
+
+    private static String toUpperCase(byte[] bytes) {
+        byte[] upper = new byte[bytes.length];
+        for (int i = 0; i < bytes.length; i++) {
+            byte b = bytes[i];
+            upper[i] = (b >= 'a' && b <= 'z') ? (byte) (b - 32) : b;
+        }
+        return new String(upper, StandardCharsets.US_ASCII);
+    }
 
     private static String describeResponse(RespMessage response) {
         return switch (response) {
@@ -133,6 +147,5 @@ public class CommandRouter {
         };
     }
 
-    // Commands that are always allowed even without AUTH
     private static final Set<String> NO_AUTH_COMMANDS = Set.of("AUTH", "QUIT", "HELLO");
 }
