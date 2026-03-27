@@ -17,7 +17,7 @@ redis-cli -p 6399 MEMQUERY agent "what language" 5
 docker run -d --name agentis-memory \
   -p 6399:6399 \
   -v agentis-data:/data \
-  scrobot/agentis-memory:v1.0.0
+  scrobot/agentis-memory:v1.0.1
 ```
 
 All parameters are passed as command arguments:
@@ -26,7 +26,7 @@ All parameters are passed as command arguments:
 docker run -d --name agentis-memory \
   -p 6399:6399 \
   -v agentis-data:/data \
-  scrobot/agentis-memory:v1.0.0 \
+  scrobot/agentis-memory:v1.0.1 \
   ./agentis-memory \
     --port 6399 \
     --bind 0.0.0.0 \
