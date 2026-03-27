@@ -14,6 +14,7 @@ import java.net.Socket;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.LongAdder;
 
 /**
  * TCP server using virtual threads and plain ServerSocket.
@@ -29,6 +30,7 @@ public class RespServer {
     private final AtomicBoolean stopped = new AtomicBoolean(false);
     private final CountDownLatch shutdownLatch = new CountDownLatch(1);
     private final AtomicInteger activeConnections = new AtomicInteger();
+    private final LongAdder totalConnectionsReceived = new LongAdder();
 
     @Inject
     public RespServer(ServerConfig config, CommandRouter router) {
@@ -65,6 +67,7 @@ public class RespServer {
         conn.setAttribute("protocol_version", 2); // RESP2 default
         conn.setAttribute("authenticated", Boolean.FALSE);
         int active = activeConnections.incrementAndGet();
+        totalConnectionsReceived.increment();
         log.trace("Client connected: {} (active: {})", conn.remoteAddress(), active);
 
         try (socket) {
@@ -122,5 +125,13 @@ public class RespServer {
 
     public void waitForShutdown() throws InterruptedException {
         shutdownLatch.await();
+    }
+
+    public int getActiveConnections() {
+        return activeConnections.get();
+    }
+
+    public long getTotalConnectionsReceived() {
+        return totalConnectionsReceived.sum();
     }
 }
