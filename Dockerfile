@@ -1,5 +1,5 @@
 # ─── Stage 1: Build native binary ────────────────────────────────────────────
-FROM container-registry.oracle.com/graalvm/native-image:25 AS builder
+FROM ghcr.io/graalvm/native-image-community:25 AS builder
 
 WORKDIR /workspace
 
@@ -24,7 +24,8 @@ COPY models/ models/
 RUN ./gradlew nativeCompile --no-daemon -x test
 
 # ─── Stage 2: Minimal runtime ───────────────────────────────────────────────
-FROM debian:bookworm-slim AS runtime
+# Ubuntu 24.04 LTS provides GLIBC 2.39, required by Oracle GraalVM 25 native binaries (GLIBC 2.38+)
+FROM ubuntu:24.04 AS runtime
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libstdc++6 zlib1g \

@@ -158,10 +158,7 @@ graalvmNative {
                     "--allow-incomplete-classpath",
 
                     // ── Reduce binary size ──
-                    "-O2",
-
-                    // ── Use G1 GC for shorter STW pauses (Oracle GraalVM only) ──
-                    "--gc=G1"
+                    "-O2"
                 )
             )
         }
