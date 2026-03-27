@@ -25,3 +25,4 @@ data/
 
 # Git worktrees
 .worktrees/
+docs-site/site/
