@@ -106,4 +106,30 @@ class RespDecoderTest {
         assertTrue(set.elements().contains(new RespMessage.SimpleString("a")));
         assertTrue(set.elements().contains(new RespMessage.SimpleString("b")));
     }
+
+    @Test
+    void testHasBufferedDataForPipelining() throws Exception {
+        // Simulate two pipelined commands: SET key val + GET key
+        String twoCommands =
+                "*3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$3\r\nval\r\n" +
+                "*2\r\n$3\r\nGET\r\n$3\r\nkey\r\n";
+        RespParser parser = new RespParser(
+                new ByteArrayInputStream(twoCommands.getBytes(StandardCharsets.UTF_8)));
+
+        // Parse first command
+        RespMessage msg1 = parser.readMessage();
+        assertInstanceOf(RespMessage.RespArray.class, msg1);
+        assertEquals(3, ((RespMessage.RespArray) msg1).elements().size());
+
+        // After first command, buffer should have second command
+        assertTrue(parser.hasBufferedData(), "Should detect pipelined data");
+
+        // Parse second command
+        RespMessage msg2 = parser.readMessage();
+        assertInstanceOf(RespMessage.RespArray.class, msg2);
+        assertEquals(2, ((RespMessage.RespArray) msg2).elements().size());
+
+        // No more data
+        assertFalse(parser.hasBufferedData(), "No more buffered data");
+    }
 }

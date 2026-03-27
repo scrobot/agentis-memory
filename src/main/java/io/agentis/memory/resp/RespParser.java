@@ -1,6 +1,5 @@
 package io.agentis.memory.resp;
 
-import java.io.BufferedInputStream;
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
@@ -8,28 +7,45 @@ import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 /**
- * Blocking InputStream-based RESP parser.
- * Replaces Netty's RespDecoder (ByteToMessageDecoder).
- * Supports RESP2 + RESP3 types.
+ * High-performance RESP parser with internal read buffer.
+ * Supports RESP2 + RESP3 types. Designed for minimal allocation on the hot path.
+ *
+ * Key optimizations vs previous version:
+ * - Own 16KB read buffer (no BufferedInputStream overhead)
+ * - readLineLong() parses integers without String allocation
+ * - readLineString() scans buffer directly for CRLF
+ * - hasBufferedData() enables pipelining in RespServer
  */
 public class RespParser {
-    private final BufferedInputStream in;
+    private final InputStream in;
+    private final byte[] buf;
+    private int pos;
+    private int limit;
 
-    public RespParser(InputStream inputStream) {
-        this.in = (inputStream instanceof BufferedInputStream bis)
-                ? bis
-                : new BufferedInputStream(inputStream);
+    public RespParser(InputStream in) {
+        this(in, 16384);
+    }
+
+    public RespParser(InputStream in, int bufferSize) {
+        this.in = in;
+        this.buf = new byte[bufferSize];
+        this.pos = 0;
+        this.limit = 0;
     }
 
     /**
-     * Reads the next RESP message from the stream.
-     * Returns null on clean disconnect (EOF before any byte read).
-     * Throws IOException on I/O error or mid-message disconnect.
+     * Returns true if there is unprocessed data in the read buffer.
+     * Used by RespServer to decide whether to flush after a command
+     * (pipelining support: skip flush if more commands are buffered).
      */
+    public boolean hasBufferedData() {
+        return pos < limit;
+    }
+
     public RespMessage readMessage() throws IOException {
-        int prefix = in.read();
+        int prefix = readByte();
         if (prefix == -1) return null; // clean disconnect
-        return switch ((byte) prefix) {
+        return switch (prefix) {
             case '+' -> decodeSimpleString();
             case '-' -> decodeError();
             case ':' -> decodeInteger();
@@ -46,31 +62,22 @@ public class RespParser {
         };
     }
 
+    // ─── Type decoders ───────────────────────────────────────────────
+
     private RespMessage decodeSimpleString() throws IOException {
-        return new RespMessage.SimpleString(readLine());
+        return new RespMessage.SimpleString(readLineString());
     }
 
     private RespMessage decodeError() throws IOException {
-        return new RespMessage.Error(readLine());
+        return new RespMessage.Error(readLineString());
     }
 
     private RespMessage decodeInteger() throws IOException {
-        String line = readLine();
-        try {
-            return new RespMessage.RespInteger(Long.parseLong(line));
-        } catch (NumberFormatException e) {
-            throw new IOException("Invalid RESP integer: " + line, e);
-        }
+        return new RespMessage.RespInteger(readLineLong());
     }
 
     private RespMessage decodeBulkString() throws IOException {
-        String line = readLine();
-        int len;
-        try {
-            len = Integer.parseInt(line);
-        } catch (NumberFormatException e) {
-            throw new IOException("Invalid RESP bulk string length: " + line, e);
-        }
+        int len = (int) readLineLong();
         if (len == -1) return new RespMessage.NullBulkString();
         byte[] data = readExact(len);
         readCrlf();
@@ -78,13 +85,7 @@ public class RespParser {
     }
 
     private RespMessage decodeArray() throws IOException {
-        String line = readLine();
-        int count;
-        try {
-            count = Integer.parseInt(line);
-        } catch (NumberFormatException e) {
-            throw new IOException("Invalid RESP array length: " + line, e);
-        }
+        int count = (int) readLineLong();
         if (count == -1) return new RespMessage.RespArray(null);
         List<RespMessage> elements = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
@@ -102,33 +103,30 @@ public class RespParser {
 
     private RespMessage decodeBoolean() throws IOException {
         int b = readByte();
+        if (b == -1) throw new EOFException("Unexpected EOF");
         readCrlf();
         return new RespMessage.Boolean(b == 't');
     }
 
     private RespMessage decodeDouble() throws IOException {
-        String line = readLine();
-        return new RespMessage.Double(java.lang.Double.parseDouble(line));
+        return new RespMessage.Double(java.lang.Double.parseDouble(readLineString()));
     }
 
     private RespMessage decodeBigNumber() throws IOException {
-        return new RespMessage.BigNumber(readLine());
+        return new RespMessage.BigNumber(readLineString());
     }
 
     private RespMessage decodeVerbatimString() throws IOException {
-        String line = readLine();
-        int len = Integer.parseInt(line);
+        int len = (int) readLineLong();
         byte[] data = readExact(len);
         readCrlf();
-        // format is 3 bytes + ':' + content
         String format = new String(data, 0, 3, StandardCharsets.UTF_8);
         String content = new String(data, 4, len - 4, StandardCharsets.UTF_8);
         return new RespMessage.VerbatimString(format, content);
     }
 
     private RespMessage decodeMap() throws IOException {
-        String line = readLine();
-        int count = Integer.parseInt(line);
+        int count = (int) readLineLong();
         Map<RespMessage, RespMessage> elements = new LinkedHashMap<>(count);
         for (int i = 0; i < count; i++) {
             RespMessage key = readMessage();
@@ -141,8 +139,7 @@ public class RespParser {
     }
 
     private RespMessage decodeSet() throws IOException {
-        String line = readLine();
-        int count = Integer.parseInt(line);
+        int count = (int) readLineLong();
         Set<RespMessage> elements = new LinkedHashSet<>(count);
         for (int i = 0; i < count; i++) {
             RespMessage msg = readMessage();
@@ -152,48 +149,130 @@ public class RespParser {
         return new RespMessage.RespSet(elements);
     }
 
+    // ─── Buffer I/O primitives ───────────────────────────────────────
+
+    private int readByte() throws IOException {
+        if (pos >= limit && !refill()) return -1;
+        return buf[pos++] & 0xFF;
+    }
+
+    private boolean refill() throws IOException {
+        int n = in.read(buf, 0, buf.length);
+        if (n <= 0) {
+            limit = 0;
+            pos = 0;
+            return false;
+        }
+        limit = n;
+        pos = 0;
+        return true;
+    }
+
     /**
-     * Reads a line terminated by \r\n. Returns the content without the terminator.
+     * Reads a CRLF-terminated line, parsing the content as a long.
+     * Avoids String allocation — hot path for array counts and bulk string lengths.
      */
-    private String readLine() throws IOException {
-        // Read bytes until \r\n
-        var buf = new java.io.ByteArrayOutputStream(64);
-        int prev = -1;
+    private long readLineLong() throws IOException {
+        long value = 0;
+        boolean negative = false;
+
+        if (pos >= limit && !refill())
+            throw new EOFException("Unexpected EOF reading line integer");
+
+        if (buf[pos] == '-') {
+            negative = true;
+            pos++;
+        }
+
         while (true) {
-            int b = in.read();
-            if (b == -1) throw new EOFException("Unexpected EOF while reading line");
+            if (pos >= limit && !refill())
+                throw new EOFException("Unexpected EOF reading line integer");
+            byte b = buf[pos++];
+            if (b == '\r') {
+                if (pos >= limit && !refill())
+                    throw new EOFException("Unexpected EOF after \\r");
+                pos++; // skip \n
+                return negative ? -value : value;
+            }
+            value = value * 10 + (b - '0');
+        }
+    }
+
+    /**
+     * Reads a CRLF-terminated line as a String.
+     * Used for SimpleString, Error, and other non-numeric types (cold path).
+     * Fast path: scans buffer for CRLF and creates String from buffer slice.
+     * Slow path: line spans buffer boundary — accumulates via ByteArrayOutputStream.
+     */
+    private String readLineString() throws IOException {
+        // Fast path: try to find \r\n within current buffer
+        for (int i = pos; i < limit - 1; i++) {
+            if (buf[i] == '\r' && buf[i + 1] == '\n') {
+                String result = new String(buf, pos, i - pos, StandardCharsets.UTF_8);
+                pos = i + 2;
+                return result;
+            }
+        }
+
+        // Slow path: line spans buffer boundary
+        var sb = new java.io.ByteArrayOutputStream(64);
+        int prev = -1;
+        while (pos < limit) {
+            byte b = buf[pos++];
             if (prev == '\r' && b == '\n') {
-                // Remove the trailing \r we already wrote
-                byte[] bytes = buf.toByteArray();
+                byte[] bytes = sb.toByteArray();
                 return new String(bytes, 0, bytes.length - 1, StandardCharsets.UTF_8);
             }
-            buf.write(b);
-            prev = b;
+            sb.write(b);
+            prev = b & 0xFF;
+        }
+        while (true) {
+            if (!refill()) throw new EOFException("Unexpected EOF while reading line");
+            while (pos < limit) {
+                byte b = buf[pos++];
+                if (prev == '\r' && b == '\n') {
+                    byte[] bytes = sb.toByteArray();
+                    return new String(bytes, 0, bytes.length - 1, StandardCharsets.UTF_8);
+                }
+                sb.write(b);
+                prev = b & 0xFF;
+            }
         }
     }
 
-    private void readCrlf() throws IOException {
-        int cr = readByte();
-        int lf = readByte();
-        if (cr != '\r' || lf != '\n') {
-            throw new IOException("Expected \\r\\n, got " + cr + "," + lf);
-        }
-    }
-
+    /**
+     * Reads exactly len bytes. Copies from buffer first, then reads
+     * remaining directly from stream (bypasses buffer for large payloads).
+     */
     private byte[] readExact(int len) throws IOException {
         byte[] data = new byte[len];
         int offset = 0;
+
+        int buffered = limit - pos;
+        if (buffered > 0) {
+            int toCopy = Math.min(buffered, len);
+            System.arraycopy(buf, pos, data, 0, toCopy);
+            pos += toCopy;
+            offset = toCopy;
+        }
+
         while (offset < len) {
             int n = in.read(data, offset, len - offset);
             if (n == -1) throw new EOFException("Unexpected EOF reading " + len + " bytes");
             offset += n;
         }
+
         return data;
     }
 
-    private int readByte() throws IOException {
-        int b = in.read();
-        if (b == -1) throw new EOFException("Unexpected EOF");
-        return b;
+    private void readCrlf() throws IOException {
+        if (pos >= limit && !refill())
+            throw new EOFException("Unexpected EOF expecting CRLF");
+        if (buf[pos++] != '\r')
+            throw new IOException("Expected \\r in CRLF");
+        if (pos >= limit && !refill())
+            throw new EOFException("Unexpected EOF expecting LF");
+        if (buf[pos++] != '\n')
+            throw new IOException("Expected \\n in CRLF");
     }
 }
