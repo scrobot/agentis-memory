@@ -1,13 +1,17 @@
 <configuration>
     <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
-            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+            <pattern>%d{HH:mm:ss.SSS} %-5level [%thread] %logger{20} — %msg%n</pattern>
         </encoder>
     </appender>
 
-    <root level="info">
+    <root level="WARN">
         <appender-ref ref="STDOUT" />
     </root>
 
-    <logger name="io.agentis.memory" level="debug" />
+    <!-- Application: INFO by default, DEBUG via -Dagentis.log.level=DEBUG -->
+    <logger name="io.agentis.memory" level="${agentis.log.level:-INFO}" />
+
+    <!-- Command traffic: separate logger so it can be turned up independently -->
+    <logger name="io.agentis.memory.command.CommandRouter" level="${agentis.log.commands:-INFO}" />
 </configuration>

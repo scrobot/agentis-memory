@@ -10,7 +10,7 @@ import org.graalvm.nativeimage.hosted.RuntimeClassInitialization;
  * <p>Key issues addressed:
  * <ul>
  *   <li>ONNX Runtime loads native shared libraries (.dylib/.so) via JNI at startup</li>
- *   <li>DJL Tokenizers loads native shared libraries via JNI at startup</li>
+ *   <li>DJL Tokenizers removed — replaced with pure Java BertTokenizer</li>
  *   <li>jvector uses the Panama Vector API which must be detected at runtime</li>
  *   <li>Logback configures itself from XML at startup and maintains static context</li>
  * </ul>
@@ -29,8 +29,7 @@ public class NativeImageFeature implements Feature {
         // ONNX Runtime: JNI-based, loads native .dylib/.so at static init
         RuntimeClassInitialization.initializeAtRunTime("ai.onnxruntime");
 
-        // DJL Tokenizers: JNI-based, loads native .dylib/.so at static init
-        RuntimeClassInitialization.initializeAtRunTime("ai.djl");
+        // DJL removed — pure Java BertTokenizer used instead
 
         // jvector: uses Panama Vector API, detects capabilities at init
         RuntimeClassInitialization.initializeAtRunTime("io.github.jbellis.jvector");

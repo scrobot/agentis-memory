@@ -6,9 +6,9 @@ services:
     image: agentis-memory:latest
     container_name: bench-agentis
     ports:
-      - "6399:6399"
+      - "16399:6399"
     healthcheck:
-      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/6399 && printf '*1\\r\\n$4\\r\\nPING\\r\\n' >&3 && read -t 2 line <&3 && [[ \"$$line\" == *PONG* ]]"]
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/localhost/6399 && printf '*1\\r\\n$$4\\r\\nPING\\r\\n' >&3 && read -t 2 line <&3 && [[ $$line == *PONG* ]]"]
       interval: 5s
       timeout: 3s
       retries: 10

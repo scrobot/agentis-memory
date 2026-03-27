@@ -45,7 +45,8 @@ dependencies {
     // Implementation
     implementation("io.github.jbellis:jvector:$jvectorVersion")
     implementation("com.microsoft.onnxruntime:onnxruntime:$onnxruntimeVersion")
-    implementation("ai.djl.huggingface:tokenizers:$djlTokenizersVersion")
+    // DJL HuggingFace Tokenizers removed — uses Rust JNI which crashes in GraalVM native-image.
+    // Replaced with pure Java BertTokenizer (io.agentis.memory.vector.BertTokenizer).
     implementation("org.slf4j:slf4j-api:$slf4jVersion")
     implementation("ch.qos.logback:logback-classic:$logbackVersion")
     implementation("io.avaje:avaje-inject:$avajeInjectVersion")

@@ -13,6 +13,7 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * TCP server using virtual threads and plain ServerSocket.
@@ -27,6 +28,7 @@ public class RespServer {
     private ServerSocket serverSocket;
     private final AtomicBoolean stopped = new AtomicBoolean(false);
     private final CountDownLatch shutdownLatch = new CountDownLatch(1);
+    private final AtomicInteger activeConnections = new AtomicInteger();
 
     @Inject
     public RespServer(ServerConfig config, CommandRouter router) {
@@ -60,7 +62,10 @@ public class RespServer {
 
     private void handleConnection(Socket socket) {
         ClientConnection conn = new SocketClientConnection(socket);
-        log.debug("Client connected: {}", conn.remoteAddress());
+        conn.setAttribute("protocol_version", 2); // RESP2 default
+        conn.setAttribute("authenticated", Boolean.FALSE);
+        int active = activeConnections.incrementAndGet();
+        log.trace("Client connected: {} (active: {})", conn.remoteAddress(), active);
 
         try (socket) {
             RespParser parser = new RespParser(socket.getInputStream());
@@ -82,22 +87,23 @@ public class RespServer {
                     writer.flush();
                     break;
                 } catch (Exception e) {
-                    log.error("Error dispatching command from {}", conn.remoteAddress(), e);
+                    log.error("Command dispatch error client={}", conn.remoteAddress(), e);
                     try {
                         writer.write(new RespMessage.Error("ERR internal error: " + e.getMessage()));
                         writer.flush();
                     } catch (IOException writeErr) {
-                        break; // can't write to client, give up
+                        break;
                     }
                 }
             }
         } catch (IOException e) {
             if (!stopped.get()) {
-                log.debug("Client disconnected: {} ({})", conn.remoteAddress(), e.getMessage());
+                log.trace("Client disconnected: {} ({})", conn.remoteAddress(), e.getMessage());
             }
         }
 
-        log.debug("Client disconnected: {}", conn.remoteAddress());
+        active = activeConnections.decrementAndGet();
+        log.trace("Client disconnected: {} (active: {})", conn.remoteAddress(), active);
     }
 
     public void shutdown() {

@@ -1,7 +1,5 @@
 package io.agentis.memory.vector;
 
-import ai.djl.huggingface.tokenizers.Encoding;
-import ai.djl.huggingface.tokenizers.HuggingFaceTokenizer;
 import ai.onnxruntime.OnnxTensor;
 import ai.onnxruntime.OrtEnvironment;
 import ai.onnxruntime.OrtSession;
@@ -18,6 +16,7 @@ import java.util.Map;
 
 /**
  * Generates 384-dim normalized float vectors from text using all-MiniLM-L6-v2 via ONNX Runtime.
+ * Uses pure Java BertTokenizer (no native JNI dependencies).
  * Thread-safe for concurrent inference calls.
  */
 @Singleton
@@ -25,7 +24,7 @@ public class Embedder implements AutoCloseable {
 
     private final OrtEnvironment env;
     private final OrtSession session;
-    private final HuggingFaceTokenizer tokenizer;
+    private final BertTokenizer tokenizer;
 
     @Inject
     public Embedder(ServerConfig config) throws Exception {
@@ -35,7 +34,7 @@ public class Embedder implements AutoCloseable {
             opts.setIntraOpNumThreads(config.embeddingThreads);
             Path modelDir = config.modelPath != null ? config.modelPath : Path.of("models");
             this.session = env.createSession(modelDir.resolve("model.onnx").toString(), opts);
-            this.tokenizer = HuggingFaceTokenizer.newInstance(modelDir.resolve("tokenizer.json"));
+            this.tokenizer = BertTokenizer.fromTokenizerJson(modelDir.resolve("tokenizer.json"), 512);
         }
     }
 
@@ -51,7 +50,7 @@ public class Embedder implements AutoCloseable {
             this.session = env.createSession(modelDir.resolve("model.onnx").toString(), opts);
         }
 
-        this.tokenizer = HuggingFaceTokenizer.newInstance(modelDir.resolve("tokenizer.json"));
+        this.tokenizer = BertTokenizer.fromTokenizerJson(modelDir.resolve("tokenizer.json"), 512);
     }
 
     /**
@@ -73,11 +72,11 @@ public class Embedder implements AutoCloseable {
 
         // Tokenize all texts via batch encode
         String[] textArray = texts.toArray(new String[0]);
-        Encoding[] encodings = tokenizer.batchEncode(textArray);
+        BertTokenizer.Encoding[] encodings = tokenizer.batchEncode(textArray);
 
         // Find max sequence length in batch
         int maxLen = 0;
-        for (Encoding enc : encodings) {
+        for (BertTokenizer.Encoding enc : encodings) {
             maxLen = Math.max(maxLen, enc.getIds().length);
         }
 
@@ -127,9 +126,6 @@ public class Embedder implements AutoCloseable {
         }
     }
 
-    /**
-     * Mean-pools the token embeddings using the attention mask to ignore padding tokens.
-     */
     private static float[] meanPool(float[][] tokenEmbeddings, long[] attentionMask) {
         int dim = tokenEmbeddings[0].length;
         float[] result = new float[dim];
@@ -151,9 +147,6 @@ public class Embedder implements AutoCloseable {
         return result;
     }
 
-    /**
-     * In-place L2 normalization. Required for cosine similarity with dot product.
-     */
     private static void l2Normalize(float[] v) {
         double norm = 0.0;
         for (float x : v) {
@@ -169,11 +162,7 @@ public class Embedder implements AutoCloseable {
 
     @Override
     public void close() throws Exception {
-        try {
-            session.close();
-        } finally {
-            tokenizer.close();
-            env.close();
-        }
+        session.close();
+        env.close();
     }
 }

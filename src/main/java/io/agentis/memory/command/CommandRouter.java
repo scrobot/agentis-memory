@@ -13,6 +13,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Parses the incoming RespMessage array into command name + args,
@@ -26,6 +27,9 @@ public class CommandRouter {
     private final ServerConfig config;
     private final AofWriter aofWriter;
     private final SnapshotManager snapshotManager;
+
+    private final AtomicLong commandsProcessed = new AtomicLong();
+    private final AtomicLong commandErrors = new AtomicLong();
 
     @Inject
     public CommandRouter(ServerConfig config, AofWriter aofWriter, SnapshotManager snapshotManager, List<CommandHandler> commandHandlers) {
@@ -73,24 +77,27 @@ public class CommandRouter {
 
         CommandHandler handler = handlers.get(name);
         if (handler == null) {
+            commandErrors.incrementAndGet();
             if (conn != null) {
                 log.warn("Unknown command '{}' from {}", name, conn.remoteAddress());
             } else {
-                log.warn("Unknown command '{}' during recovery", name);
+                log.warn("Unknown command '{}' during AOF replay", name);
             }
             return new RespMessage.Error("ERR unknown command '" + name + "'");
         }
 
         RespMessage response = handler.handle(conn, args);
         if (response instanceof RespMessage.Error err) {
+            commandErrors.incrementAndGet();
             if (conn != null) {
-                log.warn("CMD {} from {} → ERROR: {}", name, conn.remoteAddress(), err.message());
+                log.debug("CMD {} from {} → ERROR: {}", name, conn.remoteAddress(), err.message());
             } else {
-                log.warn("CMD {} during recovery → ERROR: {}", name, err.message());
+                log.debug("CMD {} during AOF replay → ERROR: {}", name, err.message());
             }
         } else {
+            commandsProcessed.incrementAndGet();
             if (conn != null) {
-                log.info("CMD {} from {} → {}", name, conn.remoteAddress(), describeResponse(response));
+                log.debug("CMD {} from {} → {}", name, conn.remoteAddress(), describeResponse(response));
                 if (handler.isWriteCommand()) {
                     aofWriter.append(args);
                     snapshotManager.incrementDirty();
@@ -105,11 +112,14 @@ public class CommandRouter {
                     }
                 }
             } else {
-                log.debug("REPLAY CMD {} → {}", name, describeResponse(response));
+                log.trace("AOF replay: {} → {}", name, describeResponse(response));
             }
         }
         return response;
     }
+
+    public long getCommandsProcessed() { return commandsProcessed.get(); }
+    public long getCommandErrors() { return commandErrors.get(); }
 
     private static String describeResponse(RespMessage response) {
         return switch (response) {

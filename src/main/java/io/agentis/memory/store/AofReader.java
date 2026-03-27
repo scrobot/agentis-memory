@@ -36,9 +36,16 @@ public class AofReader {
             return;
         }
 
-        log.info("Starting AOF recovery from {}...", aofPath);
+        long fileSize;
+        try {
+            fileSize = Files.size(aofPath);
+        } catch (IOException e) {
+            fileSize = -1;
+        }
+        log.info("AOF recovery starting: file={} size={}KB", aofPath.getFileName(), fileSize > 0 ? fileSize / 1024 : "?");
         long startTime = System.currentTimeMillis();
         int count = 0;
+        int errors = 0;
 
         try {
             byte[] bytes = Files.readAllBytes(aofPath);
@@ -49,18 +56,24 @@ public class AofReader {
                     RespMessage msg = parser.readMessage();
                     if (msg == null) break;
 
-                    router.dispatch(null, msg);
+                    RespMessage result = router.dispatch(null, msg);
                     count++;
+                    if (result instanceof RespMessage.Error) errors++;
                 } catch (Exception e) {
-                    log.error("Failed to decode AOF message after {} commands", count, e);
+                    log.error("AOF replay halted at command #{}: {}", count, e.getMessage());
                     break;
                 }
             }
         } catch (IOException e) {
-            log.error("Failed to read AOF file", e);
+            log.error("Failed to read AOF file: {}", e.getMessage());
         }
 
         long duration = System.currentTimeMillis() - startTime;
-        log.info("AOF recovery finished: replayed {} commands in {}ms", count, duration);
+        long rate = duration > 0 ? (count * 1000L / duration) : 0;
+        if (errors > 0) {
+            log.warn("AOF recovery done: {} commands in {}ms ({} cmd/s), {} errors", count, duration, rate, errors);
+        } else {
+            log.info("AOF recovery done: {} commands in {}ms ({} cmd/s)", count, duration, rate);
+        }
     }
 }

@@ -29,7 +29,7 @@ class AuthTest {
         TestInfrastructure.buildImageOnce();
         authContainer = new GenericContainer<>(TestInfrastructure.IMAGE_NAME)
                 .withExposedPorts(CONTAINER_PORT)
-                .withCommand("bin/agentis-memory", "--port", "6399", "--bind", "0.0.0.0", "--requirepass", PASSWORD)
+                .withCommand("./agentis-memory", "--port", "6399", "--bind", "0.0.0.0", "--requirepass", PASSWORD)
                 .waitingFor(Wait.forListeningPort().withStartupTimeout(Duration.ofMinutes(2)));
         authContainer.start();
         log.info("Auth container started at {}:{}", authContainer.getHost(), authContainer.getMappedPort(CONTAINER_PORT));

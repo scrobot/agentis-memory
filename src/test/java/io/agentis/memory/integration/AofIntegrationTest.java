@@ -75,7 +75,7 @@ class AofIntegrationTest extends AbstractIntegrationTest {
         return new GenericContainer<>(TestInfrastructure.IMAGE_NAME)
                 .withExposedPorts(CONTAINER_PORT)
                 .withFileSystemBind(tempDir.toAbsolutePath().toString(), "/data", BindMode.READ_WRITE)
-                .withCommand("bin/agentis-memory", "--port", "6399", "--bind", "0.0.0.0",
+                .withCommand("./agentis-memory", "--port", "6399", "--bind", "0.0.0.0",
                         "--data-dir", "/data", "--aof-enabled", "true", "--aof-fsync", "always")
                 .waitingFor(Wait.forListeningPort().withStartupTimeout(Duration.ofMinutes(2)));
     }

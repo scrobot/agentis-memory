@@ -63,17 +63,17 @@ public class ServerConfig {
     }
 
     public void logConfiguration() {
-        log.info("Configuration:");
-        log.info("  bind={}:{}", bind, port);
-        log.info("  requirepass={}", requirepass != null ? "****" : "(none)");
-        log.info("  data-dir={}", dataDir);
-        log.info("  max-memory={}mb", maxMemoryBytes / (1024 * 1024));
-        log.info("  max-value-size={}kb", maxValueSizeBytes / 1024);
-        log.info("  max-chunks-per-key={}", maxChunksPerKey);
-        log.info("  aof-enabled={}, aof-fsync={}", aofEnabled, aofFsync);
-        log.info("  snapshot-interval={}s, snapshot-after-changes={}", snapshotInterval, snapshotAfterChanges);
-        log.info("  embedding-threads={}, model-path={}", embeddingThreads, modelPath != null ? modelPath : "(auto)");
-        log.info("  hnsw-m={}, hnsw-ef-construction={}", hnswM, hnswEfConstruction);
+        log.info("Config: bind={}:{} auth={} data-dir={} max-mem={}MB max-val={}KB",
+                bind, port,
+                requirepass != null ? "yes" : "no",
+                dataDir,
+                maxMemoryBytes / (1024 * 1024),
+                maxValueSizeBytes / 1024);
+        log.info("Config: aof={}/{} snapshot={}s/{}chg embedding-threads={} hnsw=M{}/ef{}",
+                aofEnabled ? "on" : "off", aofFsync,
+                snapshotInterval, snapshotAfterChanges,
+                embeddingThreads,
+                hnswM, hnswEfConstruction);
     }
 
     private static long parseMemory(String value) {
