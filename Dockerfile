@@ -1,5 +1,5 @@
 # ─── Stage 1: Build native binary ────────────────────────────────────────────
-FROM ghcr.io/graalvm/native-image-community:25 AS builder
+FROM container-registry.oracle.com/graalvm/native-image:25 AS builder
 
 WORKDIR /workspace
 
