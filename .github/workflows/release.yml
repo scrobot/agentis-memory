@@ -31,14 +31,14 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Docker Hub login (optional, avoids rate limits)
-        if: secrets.DOCKERHUB_USERNAME != ''
+        if: vars.DOCKERHUB_USERNAME != ''
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          username: ${{ vars.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Clear stale Docker credentials
-        if: secrets.DOCKERHUB_USERNAME == ''
+        if: vars.DOCKERHUB_USERNAME == ''
         run: docker logout 2>/dev/null || true
 
       - name: Build Docker image
@@ -91,7 +91,7 @@ jobs:
 
       - uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          username: ${{ vars.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Extract version from tag
@@ -106,8 +106,8 @@ jobs:
           push: true
           platforms: linux/amd64,linux/arm64
           tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/agentis-memory:latest
-            ${{ secrets.DOCKERHUB_USERNAME }}/agentis-memory:${{ steps.version.outputs.tag }}
+            ${{ vars.DOCKERHUB_USERNAME }}/agentis-memory:latest
+            ${{ vars.DOCKERHUB_USERNAME }}/agentis-memory:${{ steps.version.outputs.tag }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
