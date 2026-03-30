@@ -237,16 +237,6 @@ done
 REMOTE_SCRIPT
 )"
 
-# ─── Generate report on remote ──────────────────────────────────────────────
-if $RUN_REPORT; then
-  log "Generating report on remote..."
-  remote "cd $REMOTE_DIR && \
-    pip3 install -q -r visualize/requirements.txt 2>/dev/null && \
-    python3 visualize/generate_report.py /tmp/bench_extract /tmp/bench_extract/report" || {
-    log "WARNING: Report generation failed. Results will still be downloaded."
-  }
-fi
-
 # ─── Teardown remote stack ───────────────────────────────────────────────────
 if $TEARDOWN; then
   log "Tearing down remote Docker stack..."
@@ -257,6 +247,18 @@ fi
 log "Downloading results to $LOCAL_OUTPUT..."
 mkdir -p "$LOCAL_OUTPUT"
 rsync -az "$SSH_TARGET:/tmp/bench_extract/" "$LOCAL_OUTPUT/"
+
+# ─── Generate report locally ─────────────────────────────────────────────────
+if $RUN_REPORT; then
+  log "Generating report locally..."
+  if command -v python3 &>/dev/null; then
+    pip3 install -q -r "$SCRIPT_DIR/visualize/requirements.txt" 2>/dev/null
+    python3 "$SCRIPT_DIR/visualize/generate_report.py" "$LOCAL_OUTPUT" "$LOCAL_OUTPUT/report"
+  else
+    log "WARNING: python3 not found locally — skipping report generation."
+    log "  Run manually: python3 benchmark/visualize/generate_report.py $LOCAL_OUTPUT $LOCAL_OUTPUT/report"
+  fi
+fi
 
 # ─── Done ────────────────────────────────────────────────────────────────────
 log "=== Done ==="
