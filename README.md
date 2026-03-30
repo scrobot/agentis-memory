@@ -20,6 +20,16 @@ docker run -d --name agentis-memory \
   scrobot/agentis-memory:v1.0.1
 ```
 
+> **Apple Silicon (M1/M2/M3/M4):** the image is built for amd64 and runs via Rosetta emulation.
+> Add `--platform linux/amd64`:
+> ```bash
+> docker run -d --name agentis-memory \
+>   --platform linux/amd64 \
+>   -p 6399:6399 \
+>   -v agentis-data:/data \
+>   scrobot/agentis-memory:v1.0.1
+> ```
+
 All parameters are passed as command arguments:
 
 ```bash
