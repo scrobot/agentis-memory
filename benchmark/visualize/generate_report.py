@@ -80,15 +80,23 @@ def parse_memtier_json(path: str) -> dict | None:
     if not totals:
         return None
 
+    # Percentile latencies may be at top level or nested under "Percentile Latencies"
+    pct = totals.get("Percentile Latencies", {})
+    if not isinstance(pct, dict):
+        pct = {}
+
+    def get_pct(key):
+        return pct.get(key, 0) or totals.get(key, 0)
+
     return {
         "ops_sec": totals.get("Ops/sec", 0),
         "hits_sec": totals.get("Hits/sec", 0),
         "misses_sec": totals.get("Misses/sec", 0),
-        "avg_latency_ms": totals.get("Latency", 0),
-        "p50_ms": totals.get("p50.00", 0),
-        "p95_ms": totals.get("p95.00", 0),
-        "p99_ms": totals.get("p99.00", 0),
-        "p99_9_ms": totals.get("p99.90", 0),
+        "avg_latency_ms": totals.get("Latency", 0) or totals.get("Average Latency", 0),
+        "p50_ms": get_pct("p50.00"),
+        "p95_ms": get_pct("p95.00"),
+        "p99_ms": get_pct("p99.00"),
+        "p99_9_ms": get_pct("p99.90"),
         "kb_sec": totals.get("KB/sec", 0),
     }
 
