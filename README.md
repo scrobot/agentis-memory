@@ -252,7 +252,7 @@ The ONNX model (`models/model.onnx`) must be present for embedding to work. Duri
 ## Roadmap
 
 - [ ] Web UI for memory exploration and search
-- [ ] Benchmarks vs Redis Stack, Dragonfly, Qdrant
+- [x] [Benchmarks](docs-site/docs/benchmarks.md) vs Redis 7.4, Dragonfly, Lux
 - [ ] TLS support
 - [ ] ACL-based namespace isolation
 - [ ] Pluggable embedding models

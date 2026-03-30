@@ -1,6 +1,10 @@
 # Generated results — not committed
 results/
 reports/
+bench_*/
+
+# Committed benchmark results (keep these)
+!bench_20260330_165644/
 
 # Python
 __pycache__/

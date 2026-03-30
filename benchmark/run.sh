@@ -6,7 +6,7 @@ usage() {
   cat <<'EOF'
 Usage: bash run.sh --ssh user@host [OPTIONS]
 
-Run benchmarks on a remote server via SSH, then download results locally.
+Run benchmarks on a remote server, poll for progress, download results.
 
 Required:
   --ssh USER@HOST         Remote server to run benchmarks on
@@ -22,6 +22,7 @@ Options:
       --no-warmup           Skip warmup phase
       --no-report           Skip report generation
       --no-teardown         Keep Docker Compose stack running after benchmarks
+      --poll-interval SEC   Polling interval in seconds (default: 30)
   -h, --help                Show this help
 
 Examples:
@@ -39,7 +40,7 @@ ALL_SCENARIOS=("strings" "hashes" "lists" "sorted-sets" "sets" "mixed-workload")
 ALL_PIPELINES=(1 10 50 100)
 
 REMOTE_DIR="/tmp/agentis-bench"
-CONTAINER_RESULTS="/tmp/bench_results"
+REMOTE_RESULTS="/tmp/bench_results"
 
 # ─── Parse args ───────────────────────────────────────────────────────────────
 SSH_TARGET=""
@@ -51,6 +52,7 @@ RUN_PIPELINES=true
 RUN_WARMUP=true
 RUN_REPORT=true
 TEARDOWN=true
+POLL_INTERVAL=30
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -72,6 +74,7 @@ while [[ $# -gt 0 ]]; do
     --no-warmup)      RUN_WARMUP=false; shift ;;
     --no-report)      RUN_REPORT=false; shift ;;
     --no-teardown)    TEARDOWN=false; shift ;;
+    --poll-interval)  POLL_INTERVAL="$2"; shift 2 ;;
     -h|--help)        usage ;;
     *) echo "Unknown option: $1"; usage ;;
   esac
@@ -103,12 +106,143 @@ log() { echo "[$(date '+%H:%M:%S')] $*"; }
 
 remote() { ssh -o StrictHostKeyChecking=accept-new "$SSH_TARGET" "$@"; }
 
-# ─── Upload benchmark files to remote ────────────────────────────────────────
+# ─── Build expected results list ─────────────────────────────────────────────
+EXPECTED_FILES=()
+if $RUN_SCENARIOS; then
+  for scenario in "${SCENARIOS[@]}"; do
+    for i in "${SERVER_INDICES[@]}"; do
+      EXPECTED_FILES+=("${ALL_SERVER_NAMES[$i]}_${scenario}.json")
+    done
+  done
+fi
+if $RUN_PIPELINES; then
+  for pipeline in "${PIPELINES[@]}"; do
+    for i in "${SERVER_INDICES[@]}"; do
+      EXPECTED_FILES+=("${ALL_SERVER_NAMES[$i]}_pipeline_${pipeline}.json")
+    done
+  done
+fi
+TOTAL_EXPECTED=${#EXPECTED_FILES[@]}
+
+# ─── Generate worker script ─────────────────────────────────────────────────
+generate_worker() {
+  cat <<WORKER_EOF
+#!/bin/bash
+set -uo pipefail
+
+REMOTE_DIR="$REMOTE_DIR"
+RESULTS="$REMOTE_RESULTS"
+CONTAINER_RESULTS="/tmp/bench_container_results"
+TEARDOWN=$TEARDOWN
+
+log() { echo "[\$(date '+%H:%M:%S')] \$*" >> "\$RESULTS/worker.log"; }
+
+flush_server() {
+  local host="\$1"; local port="\$2"
+  cd "\$REMOTE_DIR" && docker compose exec -T redis redis-cli -h "\$host" -p "\$port" FLUSHALL > /dev/null 2>&1 || true
+}
+
+run_bench() {
+  local host="\$1"; local port="\$2"; local extra_args="\$3"; local result_name="\$4"
+  local container_out="\$CONTAINER_RESULTS/\${result_name}.json"
+
+  log "Running: \$result_name"
+  cd "\$REMOTE_DIR" && docker compose exec -T memtier memtier_benchmark \\
+    -s "\$host" -p "\$port" \\
+    \$extra_args \\
+    --json-out-file="\$container_out" \\
+    --hide-histogram \\
+    >> "\$RESULTS/worker.log" 2>&1 || true
+
+  # Immediately copy result out of container
+  docker cp bench-memtier:"\$container_out" "\$RESULTS/\${result_name}.json" 2>/dev/null || true
+  log "Done: \$result_name"
+}
+
+# ─── Setup ───────────────────────────────────────────────────────────────────
+rm -rf "\$RESULTS"
+mkdir -p "\$RESULTS"
+log "Worker started"
+
+cd "\$REMOTE_DIR"
+docker compose exec -T memtier mkdir -p "\$CONTAINER_RESULTS"
+
+WORKER_EOF
+
+  # Warmup
+  if $RUN_WARMUP; then
+    cat <<WARMUP_BLOCK
+log "Warming up servers..."
+WARMUP_BLOCK
+    for i in "${SERVER_INDICES[@]}"; do
+      local host port
+      IFS=: read -r host port <<< "${ALL_SERVERS[$i]}"
+      cat <<WARMUP_ITEM
+log "  Warmup: ${ALL_SERVER_NAMES[$i]}"
+cd "\$REMOTE_DIR" && docker compose exec -T memtier memtier_benchmark \\
+  -s $host -p $port \\
+  --protocol=redis --requests=10000 --threads=2 --clients=10 \\
+  --ratio=1:1 --data-size=64 --hide-histogram > /dev/null 2>&1 || true
+flush_server "$host" "$port"
+WARMUP_ITEM
+    done
+  fi
+
+  # Scenarios
+  if $RUN_SCENARIOS; then
+    for scenario in "${SCENARIOS[@]}"; do
+      local cfg_file="$SCRIPT_DIR/scenarios/${scenario}.cfg"
+      if [[ ! -f "$cfg_file" ]]; then continue; fi
+      local cfg_args
+      cfg_args=$(grep -v '^\s*#' "$cfg_file" | grep -v '^\s*$' | tr '\n' ' ')
+
+      for i in "${SERVER_INDICES[@]}"; do
+        local host port
+        IFS=: read -r host port <<< "${ALL_SERVERS[$i]}"
+        local name="${ALL_SERVER_NAMES[$i]}"
+        cat <<SCENARIO_ITEM
+run_bench "$host" "$port" "$cfg_args" "${name}_${scenario}"
+flush_server "$host" "$port"
+SCENARIO_ITEM
+      done
+    done
+  fi
+
+  # Pipelines
+  if $RUN_PIPELINES; then
+    for pipeline in "${PIPELINES[@]}"; do
+      for i in "${SERVER_INDICES[@]}"; do
+        local host port
+        IFS=: read -r host port <<< "${ALL_SERVERS[$i]}"
+        local name="${ALL_SERVER_NAMES[$i]}"
+        cat <<PIPELINE_ITEM
+run_bench "$host" "$port" "--protocol=redis --threads=4 --clients=50 --requests=100000 --ratio=1:10 --data-size=256 --pipeline=$pipeline" "${name}_pipeline_${pipeline}"
+flush_server "$host" "$port"
+PIPELINE_ITEM
+      done
+    done
+  fi
+
+  # Teardown + DONE marker
+  cat <<FINISH_BLOCK
+
+if \$TEARDOWN; then
+  log "Tearing down Docker stack..."
+  cd "\$REMOTE_DIR" && docker compose down || true
+fi
+
+log "Worker finished"
+touch "\$RESULTS/DONE"
+FINISH_BLOCK
+}
+
+# ─── Upload and launch ──────────────────────────────────────────────────────
 log "=== Agentis Benchmark ==="
 log "Remote: $SSH_TARGET"
 log "Scenarios: ${SCENARIOS[*]}"
 log "Servers: $(for i in "${SERVER_INDICES[@]}"; do echo -n "${ALL_SERVER_NAMES[$i]} "; done)"
 $RUN_PIPELINES && log "Pipelines: ${PIPELINES[*]}" || log "Pipelines: skipped"
+log "Expected results: $TOTAL_EXPECTED"
 
 log "Uploading benchmark files to $SSH_TARGET:$REMOTE_DIR..."
 remote "rm -rf $REMOTE_DIR && mkdir -p $REMOTE_DIR"
@@ -119,12 +253,15 @@ rsync -az --delete \
   "$SCRIPT_DIR/visualize" \
   "$SSH_TARGET:$REMOTE_DIR/"
 
-# ─── Start stack on remote ───────────────────────────────────────────────────
+# Generate and upload worker script
+WORKER_SCRIPT=$(generate_worker)
+echo "$WORKER_SCRIPT" | remote "cat > $REMOTE_DIR/worker.sh && chmod +x $REMOTE_DIR/worker.sh"
+
 log "Starting Docker Compose stack on remote..."
 remote "cd $REMOTE_DIR && docker compose up -d"
 
 log "Waiting for all services to become healthy..."
-for i in {1..60}; do
+for attempt in {1..60}; do
   if remote "cd $REMOTE_DIR && \
     docker compose exec -T redis redis-cli -h agentis-memory -p 6399 PING >/dev/null 2>&1 && \
     docker compose exec -T redis redis-cli -h redis -p 6379 PING >/dev/null 2>&1 && \
@@ -133,7 +270,7 @@ for i in {1..60}; do
     log "All servers are up."
     break
   fi
-  if [ "$i" -eq 60 ]; then
+  if [ "$attempt" -eq 60 ]; then
     log "ERROR: Timed out waiting for servers."
     remote "cd $REMOTE_DIR && docker compose logs"
     exit 1
@@ -141,123 +278,67 @@ for i in {1..60}; do
   sleep 5
 done
 
-# Create results directory inside memtier container
-remote "cd $REMOTE_DIR && docker compose exec -T memtier mkdir -p $CONTAINER_RESULTS"
+log "Launching benchmark worker (detached)..."
+remote "nohup bash $REMOTE_DIR/worker.sh > /dev/null 2>&1 &"
+log "Worker launched. Polling every ${POLL_INTERVAL}s for results..."
 
-# ─── Helper functions (run on remote) ────────────────────────────────────────
-run_memtier_remote() {
-  local host="$1"; local port="$2"; local extra_args="$3"; local result_name="$4"
-  local container_out="$CONTAINER_RESULTS/${result_name}.json"
+# ─── Poll for results ───────────────────────────────────────────────────────
+prev_completed=0
+while true; do
+  sleep "$POLL_INTERVAL"
 
-  remote "cd $REMOTE_DIR && docker compose exec -T memtier memtier_benchmark \
-    -s $host -p $port \
-    $extra_args \
-    --json-out-file=$container_out \
-    --hide-histogram \
-    2>&1 | tail -12" || true
-}
+  # Count completed result files on remote
+  completed_files=$(remote "ls $REMOTE_RESULTS/*.json 2>/dev/null | wc -l" 2>/dev/null || echo "0")
+  completed_files=$(echo "$completed_files" | tr -d '[:space:]')
 
-flush_remote() {
-  local host="$1"; local port="$2"
-  remote "cd $REMOTE_DIR && docker compose exec -T redis redis-cli -h $host -p $port FLUSHALL" > /dev/null 2>&1 || true
-}
+  # Check for DONE marker
+  is_done=$(remote "test -f $REMOTE_RESULTS/DONE && echo yes || echo no" 2>/dev/null || echo "no")
 
-# ─── Warmup ───────────────────────────────────────────────────────────────────
-if $RUN_WARMUP; then
-  log "Warming up servers..."
-  for i in "${SERVER_INDICES[@]}"; do
-    IFS=: read -r host port <<< "${ALL_SERVERS[$i]}"
-    log "  Warming up ${ALL_SERVER_NAMES[$i]}..."
-    remote "cd $REMOTE_DIR && docker compose exec -T memtier memtier_benchmark \
-      -s $host -p $port \
-      --protocol=redis --requests=10000 --threads=2 --clients=10 \
-      --ratio=1:1 --data-size=64 --hide-histogram" > /dev/null 2>&1 || true
-    flush_remote "$host" "$port"
-  done
-fi
+  if [[ "$completed_files" != "$prev_completed" ]]; then
+    # Show which new files appeared
+    log "Progress: $completed_files/$TOTAL_EXPECTED results"
+    prev_completed="$completed_files"
+  fi
 
-# ─── Scenario benchmarks ──────────────────────────────────────────────────────
-if $RUN_SCENARIOS; then
-  log "Running scenario benchmarks..."
-  for scenario in "${SCENARIOS[@]}"; do
-    cfg_file="scenarios/${scenario}.cfg"
-    # Read config locally (it was uploaded via rsync)
-    if [[ ! -f "$SCRIPT_DIR/$cfg_file" ]]; then
-      log "  WARNING: $cfg_file not found, skipping"
-      continue
-    fi
-    log "  Scenario: $scenario"
-    cfg_args=$(grep -v '^\s*#' "$SCRIPT_DIR/$cfg_file" | grep -v '^\s*$' | tr '\n' ' ')
+  if [[ "$is_done" == "yes" ]]; then
+    log "Worker finished. All benchmarks complete."
+    break
+  fi
 
-    for i in "${SERVER_INDICES[@]}"; do
-      IFS=: read -r host port <<< "${ALL_SERVERS[$i]}"
-      name="${ALL_SERVER_NAMES[$i]}"
-      log "    -> $name"
+  # Check if worker is still alive
+  worker_alive=$(remote "pgrep -f 'worker.sh' >/dev/null 2>&1 && echo yes || echo no" 2>/dev/null || echo "unknown")
+  if [[ "$worker_alive" == "no" && "$is_done" != "yes" ]]; then
+    log "WARNING: Worker process died before completing. Downloading partial results."
+    break
+  fi
+done
 
-      run_memtier_remote "$host" "$port" "$cfg_args" "${name}_${scenario}"
-      flush_remote "$host" "$port"
-    done
-  done
-fi
+# ─── Download results ───────────────────────────────────────────────────────
+log "Downloading results to $LOCAL_OUTPUT..."
+mkdir -p "$LOCAL_OUTPUT"
 
-# ─── Pipeline benchmarks ──────────────────────────────────────────────────────
-if $RUN_PIPELINES; then
-  log "Running pipeline benchmarks..."
-  for pipeline in "${PIPELINES[@]}"; do
-    log "  Pipeline depth: $pipeline"
-    for i in "${SERVER_INDICES[@]}"; do
-      IFS=: read -r host port <<< "${ALL_SERVERS[$i]}"
-      name="${ALL_SERVER_NAMES[$i]}"
-      log "    -> $name (pipeline=$pipeline)"
-
-      run_memtier_remote "$host" "$port" \
-        "--protocol=redis --threads=4 --clients=50 --requests=100000 --ratio=1:10 --data-size=256 --pipeline=$pipeline" \
-        "${name}_pipeline_${pipeline}"
-      flush_remote "$host" "$port"
-    done
-  done
-fi
-
-# ─── Extract results from remote container ───────────────────────────────────
-log "Extracting results from remote..."
-remote "rm -rf /tmp/bench_extract && mkdir -p /tmp/bench_extract && \
-  cd $REMOTE_DIR && docker cp bench-memtier:$CONTAINER_RESULTS/. /tmp/bench_extract/"
-
-# Structure into subdirectories on remote
-remote "$(cat <<'REMOTE_SCRIPT'
-cd /tmp/bench_extract
+# Structure results into subdirectories on remote before downloading
+remote "$(cat <<'STRUCT_SCRIPT'
+cd /tmp/bench_results
 for name in agentis_memory redis dragonfly lux; do
   mkdir -p "$name"
   for f in ${name}_*.json; do
     [ -f "$f" ] || continue
     base=$(echo "$f" | sed "s/^${name}_//")
-    mv "$f" "$name/$base"
+    cp "$f" "$name/$base"
   done
 done
-REMOTE_SCRIPT
+STRUCT_SCRIPT
 )"
 
-# ─── Teardown remote stack ───────────────────────────────────────────────────
-if $TEARDOWN; then
-  log "Tearing down remote Docker stack..."
-  remote "cd $REMOTE_DIR && docker compose down" || true
-fi
-
-# ─── Download results to local machine ───────────────────────────────────────
-log "Downloading results to $LOCAL_OUTPUT..."
-mkdir -p "$LOCAL_OUTPUT"
-rsync -az "$SSH_TARGET:/tmp/bench_extract/" "$LOCAL_OUTPUT/"
+rsync -az "$SSH_TARGET:$REMOTE_RESULTS/" "$LOCAL_OUTPUT/"
 
 # ─── Generate report locally ─────────────────────────────────────────────────
 if $RUN_REPORT; then
-  log "Generating report locally..."
-  if command -v python3 &>/dev/null; then
-    pip3 install -q -r "$SCRIPT_DIR/visualize/requirements.txt" 2>/dev/null
-    python3 "$SCRIPT_DIR/visualize/generate_report.py" "$LOCAL_OUTPUT" "$LOCAL_OUTPUT/report"
-  else
-    log "WARNING: python3 not found locally — skipping report generation."
-    log "  Run manually: python3 benchmark/visualize/generate_report.py $LOCAL_OUTPUT $LOCAL_OUTPUT/report"
-  fi
+  bash "$SCRIPT_DIR/report.sh" "$LOCAL_OUTPUT" || {
+    log "WARNING: Report generation failed. Re-run manually:"
+    log "  bash benchmark/report.sh $LOCAL_OUTPUT"
+  }
 fi
 
 # ─── Done ────────────────────────────────────────────────────────────────────
