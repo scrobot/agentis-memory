@@ -2,7 +2,7 @@
 
 Benchmark results comparing Agentis Memory against Redis 7.4, Dragonfly, and Lux on standard KV throughput scenarios. Benchmarks were run on 2026-03-30 using memtier_benchmark 2.1.0.
 
-For interactive charts, see the full HTML report in `benchmark/bench_20260330_165644/report/`.
+**[View the interactive report with charts](benchmarks/report.html)** for visual exploration of all results.
 
 ---
 

@@ -74,5 +74,7 @@ nav:
       - Vercel AI SDK: integrations/vercel-ai-sdk.md
       - LangChain: integrations/langchain.md
       - Claude Code: integrations/claude-code.md
-  - Benchmarks: benchmarks.md
+  - Benchmarks:
+      - Overview: benchmarks.md
+      - Interactive Report: benchmarks/report.html
   - Contributing: contributing.md

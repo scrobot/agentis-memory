@@ -1,0 +1,11 @@
+/* External stylesheet — most critical styles are inlined in the template
+   for self-contained portability. This file is used when the report is
+   served from a web server or opened relative to the repo. */
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+}
+
+.chart-wrap .plotly-graph-div {
+  width: 100% !important;
+}
