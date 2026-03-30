@@ -1,9 +1,7 @@
 services:
   agentis-memory:
-    build:
-      context: ..
-      dockerfile: Dockerfile
-    image: agentis-memory:latest
+    image: scrobot/agentis-memory:v1.0.1
+    platform: linux/amd64
     container_name: bench-agentis
     ports:
       - "16399:6399"

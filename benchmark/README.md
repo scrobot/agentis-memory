@@ -15,9 +15,14 @@ same tool used by Redis, Dragonfly, and Garnet in their own published benchmarks
 
 ## Prerequisites
 
+**Remote server** (where benchmarks run):
 - Docker with Docker Compose v2
-- Python 3.11+ (for visualization and agentis-only benchmarks)
+- Python 3.11+ with pip (for report generation)
 - ~4 GB RAM free (all four servers + memtier container)
+- SSH access from your local machine
+
+**Local machine:**
+- `rsync` and `ssh`
 
 > **Note:** Building Lux from source takes several minutes on first run.
 > Subsequent runs use the cached Docker image layer.
@@ -25,35 +30,30 @@ same tool used by Redis, Dragonfly, and Garnet in their own published benchmarks
 ## Quick Start
 
 ```bash
-cd benchmark
+# Full run on remote server, results downloaded locally
+./benchmark/run.sh --ssh bench@10.0.0.5
 
-# Full run: build servers, run all scenarios, generate report
-./run.sh
-
-# Open the report
-open reports/report.html
+# Results appear in ./bench_20260330_141500/
+open bench_*/report/report.html
 ```
 
-## Manual Steps
+## Options
 
 ```bash
-# 1. Start all servers
-docker compose up -d --build
+# Only specific scenarios
+./benchmark/run.sh --ssh user@host -s strings -s hashes
 
-# 2. Run a single scenario manually
-docker compose exec memtier memtier_benchmark \
-  -s redis -p 6379 \
-  --protocol=resp2 --threads=4 --clients=50 --requests=100000 \
-  --ratio=1:10 --data-size=256 --hide-histogram
+# Only specific servers
+./benchmark/run.sh --ssh user@host -S agentis -S redis
 
-# 3. Generate report from existing results
-cd visualize
-pip install -r requirements.txt
-python generate_report.py ../results/ ../reports/
+# Only pipeline benchmarks
+./benchmark/run.sh --ssh user@host --no-scenario -p 50 -p 100
 
-# 4. Tear down
-docker compose down
+# Skip warmup / report / teardown
+./benchmark/run.sh --ssh user@host --no-warmup --no-report --no-teardown
 ```
+
+Run `./benchmark/run.sh --help` for full usage.
 
 ## Agentis-Specific Benchmarks
 
