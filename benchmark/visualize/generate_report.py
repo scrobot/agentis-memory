@@ -474,8 +474,6 @@ def generate_html_report(results: dict, reports_dir: str):
         full_html=False, include_plotlyjs=False)
     charts["latency_p99"] = build_latency_chart(results, "p99_ms").to_html(
         full_html=False, include_plotlyjs=False)
-    charts["latency_p95"] = build_latency_chart(results, "p95_ms").to_html(
-        full_html=False, include_plotlyjs=False)
     charts["pipeline"] = build_pipeline_chart(results).to_html(
         full_html=False, include_plotlyjs=False)
     charts["heatmap"] = build_heatmap(results).to_html(
